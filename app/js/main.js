@@ -45,13 +45,30 @@ function welcome() {
       <p class="lead">Safety, dispatch, tickets, expenses and the books. One app. You run the work.</p>
       <div style="margin-top:auto">
         ${PrimaryButton("Start my company", { id: "wStart" })}
+        ${SecondaryButton("Try the demo", { id: "wDemo" })}
         ${SecondaryButton("I have an invite code", { id: "wJoin" })}
+        <p class="form-msg" id="wMsg"></p>
         <p class="foot">Already set up? <button class="link" type="button" id="wSign">Sign in</button></p>
       </div>
     </div>`, { hero: true });
   $("wStart").onclick = () => { store("fp_intent", { kind: "create" }); account("create"); };
+  $("wDemo").onclick = startDemo;
   $("wJoin").onclick = () => joinCode();
   $("wSign").onclick = () => account("signin");
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("demo")) { history.replaceState(null, "", location.pathname); startDemo(); }
+  else if (qp.get("start")) { history.replaceState(null, "", location.pathname); store("fp_intent", { kind: "create" }); account("create"); }
+}
+
+// ---------- demo: a private sample company, signed in as its owner ----------
+async function startDemo() {
+  const b = $("wDemo"); if (b) setLoading(b, true);
+  msg("wMsg", "Loading a sample company. Takes a few seconds.");
+  const { data, error } = await sb.functions.invoke("demo", { body: {} });
+  if (error || !data || data.error) { if (b) setLoading(b, false); return msg("wMsg", (data && data.error) || "Couldn't load the demo. Check your signal and try again.", "bad"); }
+  store("fp_intent", null); store("fp_company", data.company_id); store("fp_setup_done_" + data.company_id, 1);
+  const { error: se } = await sb.auth.signInWithPassword({ email: data.email, password: data.password });
+  if (se) { if (b) setLoading(b, false); msg("wMsg", se.message, "bad"); }
 }
 
 // ---------- sign in / create account ----------

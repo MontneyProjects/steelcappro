@@ -44,12 +44,14 @@ view("home", { async render(main) {
       <div class="hh-top">${CompanyBrand()}${meBtn()}</div>
       <div class="hh-greet"><h1>Good ${hr < 12 ? "morning" : hr < 17 ? "afternoon" : "evening"},<br>${esc(first(S.me?.full_name) || "there")}</h1><p class="t-body" id="hSub">&nbsp;</p></div>
     </div>
+    ${S.company.plan === "demo" ? `<div style="margin-bottom:12px">${Banner(`<b>This is a demo company.</b> Tap around and try anything: approve tickets, send a dispatch, run the billing. Nothing here is real. <button class="link" type="button" id="hDemoStart">Start my real company</button>`, { icon: "info" })}</div>` : ""}
     <div class="grid-2" id="hTiles">${Skeleton(1, 92)}${Skeleton(1, 92)}</div>
     <div style="margin-top:12px">${PrimaryButton("New field ticket", { icon: "plus", go: "ticket" })}${SecondaryButton("Log fuel", { icon: "fuel", go: "fuel" })}</div>
     <div id="hOrders"></div>
     <div style="margin-top:12px" class="pay-strip"><div><div class="t-label">Hours this pay period</div><div class="ps-val" id="hHours">–</div></div><div><div class="t-label">Next payday</div><div class="ps-val accent" style="font-size:20px">${esc(nice(np.pay))}</div></div></div>
     <div id="hAdmin"></div>
     <div style="margin-top:12px">${List([ListRow({ icon: "spark", title: `Ask ${CONFIG.product}`, sub: "Who missed a Pre-Trip? What's fuel costing us?", go: "ask" })])}</div>`;
+  if ($("hDemoStart")) $("hDemoStart").onclick = async () => { store("fp_company", null); await sb.auth.signOut(); location.href = "./?start=1"; };
   const [subs, tks, ords] = await Promise.all([
     sb.from("form_submissions").select("kind,template_id,user_id").eq("company_id", S.company.id).eq("work_date", t),
     sb.from("tickets").select("hours,work_date,user_id").eq("company_id", S.company.id).eq("user_id", S.user.id).gte("work_date", per.s).lte("work_date", per.e),
