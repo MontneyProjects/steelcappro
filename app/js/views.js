@@ -17,14 +17,35 @@ const truckOpts = () => S.trucks.filter(t => t.active !== false).map(t => ({ val
 const activePeople = () => S.people.filter(p => p.active);
 const shortDate = k => new Date(k + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 
+// ---------- delete my account ----------
+function deleteAccountSheet() {
+  const owner = S.me?.role === "owner";
+  sheet(`<h3>Delete your account</h3>
+    <p class="sh-sub">${owner
+      ? `You own <b>${esc(S.company.name.replace(/\.$/, ""))}</b>. Deleting your account <b>permanently deletes the company</b> and everything in it: tickets, safety forms, dispatches, chat, fuel and receipts. Your crew lose access and any plan is cancelled. Export anything you need to keep first.`
+      : `Your login will be removed and you'll lose access to ${esc(S.company.name)}. Tickets and safety forms you already submitted stay with your employer, as required for their records.`}</p>
+    ${FormField({ id: "delIn", label: "Type DELETE to confirm", autocomplete: "off" })}
+    ${Button("Delete my account", { variant: "danger", id: "delGo" })}<p class="form-msg" id="delMsg"></p>`, el => {
+    el.querySelector("#delGo").onclick = async () => {
+      if (el.querySelector("#delIn").value.trim() !== "DELETE") return fieldError(el, "delIn", "Type DELETE in capitals");
+      setLoading(el.querySelector("#delGo"), true);
+      const { data, error } = await sb.functions.invoke("billing", { body: { action: "delete_account", confirm: "DELETE" } });
+      if (error || !data?.ok) { setLoading(el.querySelector("#delGo"), false); return msg("delMsg", data?.error || "Couldn't delete the account. Email general@montneyprojects.com and we'll do it.", "bad"); }
+      closeSheet(); store("fp_company", null); await sb.auth.signOut(); toast("Your account has been deleted");
+    };
+  });
+}
+
 // ---------- account sheet ----------
 export function accountSheet() {
   sheet(`<div class="row" style="margin-bottom:16px">${Avatar({ name: S.me?.full_name || S.user.email, size: "lg", me: true })}<div><h3>${esc(S.me?.full_name || "Your account")}</h3><div class="t-small">${esc(S.user.email)}</div></div></div>
     <div class="list"><div id="pushBox"></div>
       ${Setting("Your name", "What the crew sees", `<button class="link" type="button" id="acName">Edit</button>`)}
       ${Setting("Company", `${S.company.name} · ${S.me?.role || ""}`, S.companies.length > 1 || isAdmin() ? `<button class="link" type="button" id="acSwitch">Switch</button>` : "")}</div>
-    <div style="margin-top:16px">${Button("Sign out", { variant: "secondary", icon: "logout", id: "acOut" })}</div>`, async el => {
+    <div style="margin-top:16px">${Button("Sign out", { variant: "secondary", icon: "logout", id: "acOut" })}</div>
+    <p class="t-small" style="text-align:center; margin:16px 0 0"><a href="/privacy/" target="_blank" rel="noopener">Privacy</a> &nbsp;·&nbsp; <a href="/terms/" target="_blank" rel="noopener">Terms</a> &nbsp;·&nbsp; <button class="link" type="button" id="acDel" style="color:var(--danger-text)">Delete account</button></p>`, async el => {
     el.querySelector("#acOut").onclick = () => { closeSheet(); sb.auth.signOut(); };
+    el.querySelector("#acDel").onclick = () => deleteAccountSheet();
     const sw = el.querySelector("#acSwitch"); if (sw) sw.onclick = () => window.__fp.switchCompany();
     el.querySelector("#acName").onclick = () => sheet(`<h3>Your name</h3>${FormField({ id: "nmIn", label: "Full name", value: S.me?.full_name || "" })}${PrimaryButton("Save", { id: "nmSave" })}`, e2 => e2.querySelector("#nmSave").onclick = async () => {
       const n = e2.querySelector("#nmIn").value.trim(); if (!n) return fieldError(e2, "nmIn", "Enter your name");
@@ -44,6 +65,7 @@ view("home", { async render(main) {
       <div class="hh-top">${CompanyBrand()}${meBtn()}</div>
       <div class="hh-greet"><h1>Good ${hr < 12 ? "morning" : hr < 17 ? "afternoon" : "evening"},<br>${esc(first(S.me?.full_name) || "there")}</h1><p class="t-body" id="hSub">&nbsp;</p></div>
     </div>
+    ${S.company.billing_status === "past_due" && S.me?.role === "owner" ? `<div style="margin-bottom:12px">${Banner(`<b>Your last payment didn't go through.</b> Update your card to keep your crew on Steelcap Pro. <button class="link" type="button" id="hPastDue">Update card</button>`, { tone: "warn" })}</div>` : ""}
     ${S.company.plan === "demo" ? `<div style="margin-bottom:12px">${Banner(`<b>This is a demo company.</b> Tap around and try anything: approve tickets, send a dispatch, run the billing. Nothing here is real. <button class="link" type="button" id="hDemoStart">Start my real company</button>`, { icon: "info" })}</div>` : ""}
     <div class="grid-2" id="hTiles">${Skeleton(1, 92)}${Skeleton(1, 92)}</div>
     <div style="margin-top:12px">${PrimaryButton("New field ticket", { icon: "plus", go: "ticket" })}${SecondaryButton("Log fuel", { icon: "fuel", go: "fuel" })}</div>
@@ -51,6 +73,7 @@ view("home", { async render(main) {
     <div style="margin-top:12px" class="pay-strip"><div><div class="t-label">Hours this pay period</div><div class="ps-val" id="hHours">–</div></div><div><div class="t-label">Next payday</div><div class="ps-val accent" style="font-size:20px">${esc(nice(np.pay))}</div></div></div>
     <div id="hAdmin"></div>
     <div style="margin-top:12px">${List([ListRow({ icon: "spark", title: `Ask ${CONFIG.product}`, sub: "Who missed a Pre-Trip? What's fuel costing us?", go: "ask" })])}</div>`;
+  if ($("hPastDue")) $("hPastDue").onclick = () => go("plan");
   if ($("hDemoStart")) $("hDemoStart").onclick = async () => { store("fp_company", null); await sb.auth.signOut(); location.href = "./?start=1"; };
   const [subs, tks, ords] = await Promise.all([
     sb.from("form_submissions").select("kind,template_id,user_id").eq("company_id", S.company.id).eq("work_date", t),

@@ -199,12 +199,29 @@ async function setup(req: Request) {
   return out;
 }
 
+// Checks Stripe accepts our checkout settings, then expires the test session. Needs x-cron-secret.
+async function selftest(req: Request) {
+  const s = await secrets();
+  if (!s.cron_secret || req.headers.get("x-cron-secret") !== s.cron_secret) throw new Error("Not allowed");
+  const session = await stripe("POST", "checkout/sessions", {
+    mode: "subscription", line_items: [{ price: s.stripe_price_199, quantity: 1 }],
+    subscription_data: { trial_period_days: 7, metadata: { company_id: "selftest" } }, metadata: { company_id: "selftest" },
+    ...(s.stripe_auto_tax === "true" ? { automatic_tax: { enabled: true } } : {}),
+    tax_id_collection: { enabled: true }, allow_promotion_codes: true, billing_address_collection: "required",
+    success_url: "https://steelcappro.com/app/?billing=ok", cancel_url: "https://steelcappro.com/app/?billing=cancel",
+  });
+  await stripe("POST", `checkout/sessions/${session.id}/expire`);
+  const acct = await stripe("GET", "account").catch((e) => ({ error: (e as Error).message }));
+  return { ok: true, session: session.id, charges_enabled: acct.charges_enabled, payouts_enabled: acct.payouts_enabled, details_submitted: acct.details_submitted, requirements: acct.requirements?.currently_due, acct_error: acct.error };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.headers.get("stripe-signature")) return webhook(req);
   try {
     const b = await req.json().catch(() => ({}));
     if (b.action === "setup") return json(await setup(req));
+    if (b.action === "selftest") return json(await selftest(req));
     if (b.action === "checkout") return json(await checkout(req, b));
     if (b.action === "portal") return json(await portal(req, b));
     if (b.action === "sync") return json(await sync(req, b));

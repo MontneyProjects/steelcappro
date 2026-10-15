@@ -1,11 +1,14 @@
 // Boot, sign-in / create account, join with an invite code, and the 6-step company setup.
-import { sb, S, CONFIG, $, esc, store, toast, msg, svg, go, loadCompany, applyTheme, logoUrl, closeSheet, sheet, uploadFile, signUrls, fileUrl } from "./core.js";
+import { sb, S, CONFIG, $, esc, store, toast, msg, svg, go, loadCompany, billingOk, isOwner, applyTheme, logoUrl, closeSheet, sheet, uploadFile, signUrls, fileUrl } from "./core.js";
 import { BrandLockup, PrimaryButton, SecondaryButton, Button, FormField, Select, SegmentedControl, RadioList, StickyBar, IconButton, EmptyState,
   setLoading, fieldError, clearErrors, segValue, radioValue, Avatar } from "./ui.js";
 import "./views.js";
 import { startChat } from "./chat.js";
 import { refreshPush } from "./push.js";
 import { flush, refreshNet } from "./outbox.js";
+
+// creator / referral code: steelcappro.com/?ref=name (landing page stores it too, same origin)
+{ const r = new URLSearchParams(location.search).get("ref"); if (r) store("sc_ref", r.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40)); }
 
 document.title = CONFIG.product;
 const paint = root => root.querySelectorAll("[data-i]").forEach(el => { if (!el.querySelector("svg")) el.insertAdjacentHTML("afterbegin", svg(el.dataset.i)); });
@@ -90,11 +93,12 @@ function account(mode = "signin", preset = {}) {
       <div class="form-field" data-field="acPass"><label for="acPass">Password</label><div class="input-icon">${svg("lock")}<input class="input" id="acPass" type="password" autocomplete="${create ? "new-password" : "current-password"}"><button type="button" class="icon-btn reveal" id="acReveal" aria-label="Show password">${svg("eye")}</button></div><div class="ff-error" hidden>${svg("alert")}<span></span></div></div>
       <div style="text-align:right; margin:-6px 0 12px" id="acForgotWrap" ${create ? "hidden" : ""}><button class="link" type="button" id="acForgot">Forgot password?</button></div>
       ${PrimaryButton(create ? "Create account" : "Sign in", { id: "acBtn", type: "submit" })}
+      <p class="t-small" id="acLegal" style="text-align:center; margin-top:10px" ${create ? "" : "hidden"}>By creating an account you agree to the <a href="/terms/" target="_blank" rel="noopener">Terms</a> and <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a>.</p>
       <p class="form-msg" id="acMsg"></p>
     </form>
     ${oauthButtons()}`);
   let m = mode;
-  const setMode = v => { m = v; $("acCreateFields").hidden = v !== "create"; $("acForgotWrap").hidden = v === "create"; $("acBtn").querySelector("span").textContent = v === "create" ? "Create account" : "Sign in"; $("acPass").autocomplete = v === "create" ? "new-password" : "current-password"; msg("acMsg", ""); clearErrors(gate); };
+  const setMode = v => { m = v; $("acCreateFields").hidden = v !== "create"; $("acLegal").hidden = v !== "create"; $("acForgotWrap").hidden = v === "create"; $("acBtn").querySelector("span").textContent = v === "create" ? "Create account" : "Sign in"; $("acPass").autocomplete = v === "create" ? "new-password" : "current-password"; msg("acMsg", ""); clearErrors(gate); };
   gate.addEventListener("seg", e => setMode(e.detail));
   $("acBack").onclick = () => store("fp_intent")?.kind === "join" && preset.title ? joinCode() : welcome();
   $("acReveal").onclick = () => { const p = $("acPass"); p.type = p.type === "password" ? "text" : "password"; };
@@ -196,6 +200,12 @@ export async function enter(cid) {
   gate.hidden = true; $("app").hidden = false; hideSplash();
   if (S.company.created_by === S.user.id && !store("fp_setup_done_" + cid) && S.trucks.length === 0 && !S.company.logo_path) return wizard(2);
   const qp = new URLSearchParams(location.search);
+  if (qp.get("billing") === "ok" && isOwner()) {
+    await sb.functions.invoke("billing", { body: { action: "sync", company_id: cid } }).catch(() => {});
+    await loadCompany(cid);
+    if (billingOk()) toast("You're all set. Your 7-day free trial has started.");
+  }
+  if (!billingOk()) { history.replaceState(null, "", location.pathname); return paywall(); }
   if ([...qp.keys()].length) history.replaceState(null, "", location.pathname);
   if (qp.get("qbo")) go("integrations"); else if (qp.get("chat")) go("thread", { id: qp.get("chat") }); else go(qp.get("v") || "home");
   startChat(); refreshPush(); refreshNet(); flush();
@@ -205,6 +215,32 @@ sb.auth.onAuthStateChange((evt, session) => {
   if (evt === "SIGNED_OUT") { S.user = null; S.company = null; welcome(); return; }
   if (evt === "INITIAL_SESSION" || evt === "SIGNED_IN") setTimeout(() => { if (!S.company || !session || S.user?.id !== session.user.id) route(session); }, 0);
 });
+// ---------- plan required ----------
+function paywall() {
+  const co = S.company, owner = isOwner(), ended = ["canceled", "inactive"].includes(co.billing_status) || !!co.stripe_subscription_id;
+  const big = S.people.filter(p => p.active).length > 20;
+  showGate(`<div style="margin:24px 0 18px">${BrandLockup({ mark: 46, size: 22 })}</div>
+    ${owner ? `<h1 style="margin:0 0 6px">${ended ? "Restart your plan" : "Start your 7-day free trial"}</h1>
+      <p class="lead">${esc(co.name)} is set up. ${ended ? "Pick up where you left off." : "Try everything free for 7 days. Cancel anytime before it ends and you won't be charged."}</p>
+      <div class="card" style="margin:18px 0">
+        <div style="display:flex; align-items:baseline; gap:8px"><span style="font-size:40px; font-weight:900; letter-spacing:-.02em">$${big ? 249 : 199}</span><span class="t-small">CAD / month${big ? ", more than 20 users" : ", up to 20 users"}</span></div>
+        <ul class="t-body" style="margin:10px 0 0; padding-left:20px; line-height:1.8"><li>Every feature, your whole crew</li><li>QuickBooks, Excel or Google Sheets</li><li>Cancel anytime from Settings</li></ul>
+      </div>
+      ${PrimaryButton(ended ? "Restart plan" : "Start free trial", { id: "pwGo" })}
+      <p class="t-small" style="text-align:center; margin-top:10px">Secure checkout by Stripe. Plus GST where it applies.</p>`
+    : `<h1 style="margin:0 0 6px">${esc(co.name)} isn't active</h1><p class="lead">The company's Steelcap Pro plan isn't active right now. Ask your owner to start or restart it, then come back.</p>`}
+    <p class="form-msg" id="pwMsg"></p>
+    <div style="margin-top:auto; padding-top:24px">${S.companies.length > 1 ? `<button class="btn ghost full" type="button" id="pwSwitch">Switch company</button>` : ""}<button class="btn ghost full" type="button" id="pwOut">Sign out</button></div>`);
+  if ($("pwGo")) $("pwGo").onclick = async () => {
+    setLoading($("pwGo"), true); msg("pwMsg", "");
+    const { data, error } = await sb.functions.invoke("billing", { body: { action: "checkout", company_id: co.id, return_to: location.origin + location.pathname } });
+    if (error || !data?.url) { setLoading($("pwGo"), false); return msg("pwMsg", data?.error || "Couldn't open checkout. Try again.", "bad"); }
+    location.href = data.url;
+  };
+  if ($("pwSwitch")) $("pwSwitch").onclick = () => window.__fp.switchCompany();
+  $("pwOut").onclick = () => sb.auth.signOut();
+}
+
 function newPassword() {
   showGate(`<div style="margin:24px 0">${BrandLockup({ mark: 46, size: 22 })}</div><h1>New password</h1>
     <form id="npForm">${FormField({ id: "npPass", label: "New password", type: "password", autocomplete: "new-password" })}${PrimaryButton("Save password", { id: "npBtn", type: "submit" })}<p class="form-msg" id="npMsg"></p></form>`);
@@ -242,7 +278,9 @@ export async function wizard(n, opts = {}) {
       const prov = $("wzProv").value, tz = { BC: "America/Vancouver", SK: "America/Regina", MB: "America/Winnipeg", ON: "America/Toronto" }[prov] || "America/Edmonton";
       const { data, error } = await sb.rpc("create_company", { p_name: $("wzName").value, p_full_name: $("wzMe").value, p_phone: intent.phone || meta.phone || null, p_province: prov, p_timezone: tz });
       if (error) { setLoading($("wzNext"), false); return msg("wzMsg", error.message, "bad"); }
-      store("fp_intent", null); await loadCompany(data); wizard(2);
+      store("fp_intent", null);
+      const ref = store("sc_ref"); if (ref) await sb.rpc("set_company_ref", { cid: data, p_ref: ref });
+      await loadCompany(data); wizard(2);
     };
     return;
   }

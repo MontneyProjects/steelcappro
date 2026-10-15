@@ -16,6 +16,7 @@ export const sb = createClient(CONFIG.url, CONFIG.key, { auth: { persistSession:
 export const S = { user: null, companies: [], company: null, me: null, people: [], byId: {}, trucks: [], clients: [], templates: [], view: "home", params: {} };
 export const isAdmin = () => !!S.me && (S.me.role === "owner" || S.me.role === "admin");
 export const isOwner = () => !!S.me && S.me.role === "owner";
+export const billingOk = () => !S.billingLive || !S.company || S.company.plan === "demo" || S.company.comped || ["trialing", "active", "past_due"].includes(S.company.billing_status);
 
 // ---------- small helpers ----------
 export const $ = id => document.getElementById(id);
@@ -191,6 +192,7 @@ export async function loadCompany(cid) {
   ]);
   if (co.error) throw co.error;
   S.company = co.data;
+  if (S.billingLive === undefined) { const { data: bl } = await sb.from("app_settings").select("value").eq("key", "billing_live").maybeSingle(); S.billingLive = bl?.value === "true"; }
   S.people = mem.data || []; S.byId = Object.fromEntries(S.people.map(p => [p.user_id, p]));
   S.me = S.byId[S.user.id] || null;
   S.trucks = tr.data || []; S.clients = cl.data || []; S.templates = ft.data || [];

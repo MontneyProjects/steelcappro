@@ -231,6 +231,30 @@ view("team", { tab: "more", async render(main) {
 } });
 
 // ---------- settings ----------
+const fmtDay = d => d ? new Date(String(d).length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : "";
+function billingLabel(co) {
+  if (co.comped) return "Free account";
+  return { trialing: `Free trial, ends ${fmtDay(co.trial_ends)}`, active: `Active · renews ${fmtDay(co.period_end)}`, past_due: "Payment failed, update your card", canceled: "Cancelled", inactive: "Not active", none: "No plan yet" }[co.billing_status] || "No plan yet";
+}
+view("plan", { tab: "more", async render(main) {
+  if (!guard(main)) return;
+  const co = S.company, has = !!co.stripe_customer_id && co.billing_status !== "none";
+  main.innerHTML = `${TopBar({ title: "Plan and billing", back: "settings" })}
+    ${Card(`<div class="t-eyebrow">Your plan</div><div class="t-h2" style="margin:4px 0">${esc(billingLabel(co))}</div>
+      <p class="t-body" style="margin:6px 0 0">$199 CAD a month for up to 20 users, $249 for more than 20. Plus GST where it applies.</p>`)}
+    <div style="margin-top:16px">${co.comped ? "" : has ? PrimaryButton("Manage billing", { id: "blGo", icon: "dollar" }) : PrimaryButton("Start 7-day free trial", { id: "blStart" })}</div>
+    <p class="t-small" style="margin-top:12px">${has ? "Update your card, download invoices, or cancel. Cancelling keeps access until the end of the period you paid for." : ""}</p>
+    <p class="form-msg" id="blMsg"></p>`;
+  const open = async (action, btn) => {
+    setLoading(btn, true);
+    const { data, error } = await sb.functions.invoke("billing", { body: { action, company_id: co.id, return_to: location.origin + location.pathname } });
+    if (error || !data?.url) { setLoading(btn, false); return msg("blMsg", data?.error || "Couldn't open billing. Try again.", "bad"); }
+    location.href = data.url;
+  };
+  if ($("blGo")) $("blGo").onclick = () => open("portal", $("blGo"));
+  if ($("blStart")) $("blStart").onclick = () => open("checkout", $("blStart"));
+} });
+
 view("settings", { tab: "more", async render(main) {
   if (!guard(main)) return;
   const co = S.company, ps = co.pay_schedule || {};
@@ -240,7 +264,8 @@ view("settings", { tab: "more", async render(main) {
     ListRow({ icon: "truck", title: "Trucks", sub: `${S.trucks.length} unit${S.trucks.length === 1 ? "" : "s"}`, data: { "data-set": "trucks" }, chev: true }),
     ListRow({ icon: "users", title: "Clients", sub: `${S.clients.length} client${S.clients.length === 1 ? "" : "s"}`, data: { "data-set": "clients" }, chev: true }),
     ListRow({ icon: "shield", title: "Safety forms", sub: `${S.templates.filter(t => t.active).length} active`, go: "formsettings" }),
-    ListRow({ icon: "gear", title: "Company details", sub: co.name, data: { "data-set": "details" }, chev: true })])}</div>`;
+    ListRow({ icon: "gear", title: "Company details", sub: co.name, data: { "data-set": "details" }, chev: true }),
+    ...(isOwner() && co.plan !== "demo" ? [ListRow({ icon: "dollar", title: "Plan and billing", sub: billingLabel(co), go: "plan" })] : [])])}</div>`;
   main.addEventListener("click", e => {
     const b = e.target.closest("[data-set]"); if (!b) return;
     const a = b.dataset.set, w = n => window.__fp.wizard(n, { single: true });
