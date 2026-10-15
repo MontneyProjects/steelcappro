@@ -7,7 +7,7 @@
 <meta property="og:locale" content="en_CA">
 <meta name="google-site-verification" content="PoKLCHnaEx-nal4PWyBnC6-HSY0PVuBTAv8FXb6iPLo" />
 <link rel="canonical" href="https://steelcappro.com/">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Steelcap Pro","url":"https://steelcappro.com/","applicationCategory":"BusinessApplication","operatingSystem":"iOS, Android, Web","description":"Safety forms, field tickets, dispatch and billing for field crews of 1 to 20. Connects to QuickBooks.","publisher":{"@type":"Organization","name":"Steelcap Pro","email":"general@montneyprojects.com","areaServed":["Canada","United States"]},"offers":{"@type":"Offer","priceCurrency":"CAD","availability":"https://schema.org/InStock"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Steelcap Pro","url":"https://steelcappro.com/","applicationCategory":"BusinessApplication","operatingSystem":"iOS, Android, Web","description":"Safety forms, field tickets, dispatch and billing for field crews of 1 to 20. Connects to QuickBooks.","publisher":{"@type":"Organization","name":"Steelcap Pro","email":"general@montneyprojects.com","areaServed":["Canada","United States"]},"offers":{"@type":"Offer","price":"199","priceCurrency":"CAD","availability":"https://schema.org/InStock"}}</script>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steelcap Pro">
 <meta property="og:title" content="Steelcap Pro - Your whole company. One easy app.">
@@ -117,6 +117,15 @@ h2{font-weight:900;font-variation-settings:"wdth" 118;font-size:clamp(34px,4.6vw
 .price{border-radius:22px;padding:34px;background:var(--rig);border:1px solid var(--line)}
 .price h3{margin:0 0 6px;font-size:24px;font-weight:800}
 .price p{margin:0 0 22px;color:#B4BEC4}
+.price .amt{display:flex;align-items:baseline;gap:10px;margin:8px 0 14px}
+.price .amt b{font-size:56px;line-height:1;font-weight:900;font-variation-settings:"wdth" 125;color:var(--snow)}
+.price .amt span{color:var(--steel);font-size:15px}
+.price .incl{list-style:none;padding:0;margin:0 0 16px}
+.price .incl li{padding:6px 0 6px 26px;position:relative;color:#D3DADE;font-size:16px}
+.price .incl li::before{content:"";position:absolute;left:2px;top:13px;width:12px;height:6px;border-left:3px solid var(--teal);border-bottom:3px solid var(--teal);transform:rotate(-45deg)}
+.price .more{font-size:15px}
+.price .tag{margin:-6px 0 14px;color:var(--teal);font-weight:700;font-size:16px}
+.price .more b{color:var(--snow)}
 footer{border-top:1px solid var(--line);padding:30px 0 50px;color:var(--steel);font-size:14px}
 footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 
@@ -276,9 +285,16 @@ html,body{overflow-x:hidden}
     </div>
     <div class="price">
       <h3>Pricing</h3>
-      <p>Simple monthly pricing for crews of 1 to 20. Get in touch and we'll set you up.</p>
+      <div class="amt"><b>$199</b><span>CAD / month per company</span></div>
+      <p class="tag">Less than one billable hour a week.</p>
+      <ul class="incl">
+        <li>Up to 20 users, every feature</li>
+        <li>QuickBooks, Excel or Google Sheets</li>
+        <li>7-day free trial, cancel anytime</li>
+      </ul>
+      <p class="more">More than 20 users: <b>$249 CAD / month</b>.</p>
       <div class="cta-row">
-        <a class="btn go" href="app/">Get the app</a>
+        <a class="btn go" href="app/">Start free trial</a>
         <a class="btn ghost" href="mailto:general@montneyprojects.com?subject=Steelcap%20Pro">Email us</a>
       </div>
     </div>

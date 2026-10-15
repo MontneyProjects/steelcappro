@@ -9,7 +9,7 @@ PRIVACY = f"""
 # Privacy Policy
 _Last updated: {UPDATED}_
 
-This policy explains what information Steelcap Pro ("Steelcap Pro", "we", "us") collects when you use the Steelcap Pro app and website at steelcappro.com, how we use it, and the choices you have. We wrote it in plain language. If anything is unclear, email us at {CONTACT}.
+Steelcap Pro is operated by 2619681 Alberta Ltd. ("Steelcap Pro", "we", "us"). This policy explains what information we collect when you use the Steelcap Pro app and website at steelcappro.com, how we use it, and the choices you have. We wrote it in plain language. If anything is unclear, email us at {CONTACT}.
 
 ## Who this applies to
 Steelcap Pro is used by companies ("Customers") and the people they invite, such as owners, office staff, foremen and crew ("Users"). A Customer controls the information its crew enters into its company account. We store and process that information on the Customer's behalf to run the service.
@@ -64,6 +64,8 @@ Steelcap Pro is a work tool and is not meant for anyone under 16.
 If we make important changes, we will update the date at the top and let account owners know by email or in the app.
 
 ## Contact
+2619681 Alberta Ltd. (Steelcap Pro)
+101-10601 82 Ave, Clairmont, AB T8X 5G9, Canada
 Questions or requests: {CONTACT}
 """
 
@@ -71,7 +73,7 @@ TERMS = f"""
 # Terms of Service
 _Last updated: {UPDATED}_
 
-These terms are the agreement between your company and Steelcap Pro ("Steelcap Pro", "we", "us") for using the Steelcap Pro app and website. By creating an account or using the app, you agree to them. If you are signing up for a company, you confirm you are allowed to accept these terms for it.
+Steelcap Pro is operated by 2619681 Alberta Ltd. ("Steelcap Pro", "we", "us"). These terms are the agreement between your company and us for using the Steelcap Pro app and website. By creating an account or using the app, you agree to them. If you are signing up for a company, you confirm you are allowed to accept these terms for it.
 
 ## The service
 Steelcap Pro is software for running field crews: safety forms, field tickets, dispatch, crew chat, fuel and expense tracking, and sending records to accounting tools such as QuickBooks Online, Google Sheets or Excel. We may add, change or remove features over time.
@@ -97,7 +99,7 @@ AI answers and receipt scans can be wrong. Check them before relying on them for
 Do not use Steelcap Pro to break the law, upload content you have no right to share, harass anyone, try to access another company's data, interfere with the service, or resell it without our written permission.
 
 ## Fees and billing
-Paid plans are billed in advance on a monthly or yearly basis at the price shown when you sign up, plus applicable taxes. Unless you cancel, your plan renews automatically. You can cancel at any time and keep access until the end of the period you paid for. Fees already paid are not refunded except where the law requires. We will give at least 30 days' notice before a price change affects you. If a payment fails, we may limit the account until it is paid.
+Paid plans are billed in advance on a monthly basis at the price shown on our website when you sign up, plus applicable taxes (such as GST). New companies get a 7-day free trial; if you do not cancel before it ends, your plan starts and your card is charged. Unless you cancel, your plan renews automatically. You can cancel at any time and keep access until the end of the period you paid for. Fees already paid are not refunded except where the law requires. We will give at least 30 days' notice before a price change affects you. If a payment fails, we may limit the account until it is paid.
 
 ## Free trials and demos
 Trial and demo accounts may be limited, and demo companies are deleted automatically. Do not put real records in a demo company.
@@ -118,6 +120,8 @@ If we make important changes, we will update the date at the top and tell accoun
 These terms are governed by the laws of the Province of Alberta and the federal laws of Canada that apply there.
 
 ## Contact
+2619681 Alberta Ltd. (Steelcap Pro)
+101-10601 82 Ave, Clairmont, AB T8X 5G9, Canada
 {CONTACT}
 """
 
@@ -172,7 +176,7 @@ footer a{{color:var(--steel)}}
 <main><div class="wrap">
 {body}
 </div></main>
-<footer><div class="wrap"><span>© 2026 Steelcap Pro</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="mailto:{contact}">Contact</a></div></footer>
+<footer><div class="wrap"><span>© 2026 2619681 Alberta Ltd. (Steelcap Pro)</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="mailto:{contact}">Contact</a></div></footer>
 </body></html>
 """
 
