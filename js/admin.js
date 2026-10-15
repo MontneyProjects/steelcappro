@@ -3,7 +3,8 @@ import { sb, S, $, esc, toast, msg, svg, view, go, isAdmin, isOwner, today, iso,
   truckName, clientName, sheet, closeSheet, uploadFile, signUrls, fileUrl, viewImage, loadCompany, CONFIG } from "./core.js";
 import { TopBar, Section, StickyBar, Card, MetricCard, ListRow, List, Avatar, StatusBadge, EmptyState, Skeleton, Banner,
   PrimaryButton, SecondaryButton, Button, IconButton, FormField, TextArea, Select, SegmentedControl, Chips, PeoplePicker, Capture, Setting, Toggle,
-  setLoading, fieldError, clearErrors, segValue, peopleValues } from "./ui.js";
+  setLoading, fieldError, clearErrors, segValue, peopleValues, RadioList } from "./ui.js";
+import { exportSheet } from "./export.js";
 
 const guard = main => { if (isAdmin()) return true; main.innerHTML = `${TopBar({ title: "Admins only", back: "home" })}${EmptyState({ icon: "lock", title: "Admins only", text: "Ask your boss if you need access to this." })}`; return false; };
 const shortDate = k => new Date(k + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" });
@@ -100,9 +101,13 @@ view("alltickets", { tab: "tickets", async render(main, p) {
   const { data } = await sb.from("tickets").select("*").eq("company_id", S.company.id).eq("status", status).order("work_date", { ascending: false }).limit(300);
   const rows = data || [];
   if (status === "submitted" && rows.length) $("atTop").innerHTML = `<div style="margin-bottom:14px">${PrimaryButton(`Approve all ${rows.length}`, { id: "atAll", icon: "check" })}</div>`;
-  if (status === "approved" && rows.length) $("atTop").innerHTML = `<div style="margin-bottom:14px">${S.company.qbo_connected
-    ? `${Banner(`<b>${rows.length} approved ticket${rows.length > 1 ? "s" : ""}</b> ready to become invoice drafts in QuickBooks, one per client. Nothing gets sent to the client.`, { icon: "info" })}<div style="margin-top:12px">${PrimaryButton("Draft invoices in QuickBooks", { id: "atInv", icon: "file" })}</div>`
-    : Banner(`<b>Connect QuickBooks</b> in More › QuickBooks to turn these into invoice drafts automatically.`, { icon: "link" })}</div>`;
+  const books = S.company.books || "quickbooks";
+  if (status !== "submitted") $("atTop").innerHTML = `<div style="margin-bottom:14px">${
+    status === "approved" && rows.length && books === "quickbooks" ? (S.company.qbo_connected
+      ? `${Banner(`<b>${rows.length} approved ticket${rows.length > 1 ? "s" : ""}</b> ready to become invoice drafts in QuickBooks, one per client. Nothing gets sent to the client.`, { icon: "info" })}<div style="margin-top:12px">${PrimaryButton("Draft invoices in QuickBooks", { id: "atInv", icon: "file" })}</div>`
+      : Banner(`<b>Connect QuickBooks</b> in More › Books to turn these into invoice drafts automatically.`, { icon: "link" }))
+    : books === "sheets" ? Banner(`Approved tickets show up in your <b>Google Sheet</b> on their own, about every hour.`, { icon: "info" }) : ""}
+    <div style="margin-top:12px">${(books === "excel" ? PrimaryButton : SecondaryButton)("Download Excel", { id: "atXls", icon: "upload" })}</div></div>`;
   const byClient = {}; rows.forEach(r => (byClient[r.client_id || "none"] = byClient[r.client_id || "none"] || []).push(r));
   $("atList").innerHTML = rows.length ? Object.entries(byClient).map(([c, list]) => `${Section(`${c === "none" ? "No client picked" : clientName(c)} · ${fmtH(list.reduce((a, r) => a + Number(r.hours || 0), 0))} hrs`)}
     ${List(list.map(r => `<div class="list-row" style="flex-wrap:wrap">${Avatar({ name: nameOf(r.user_id), size: "sm" })}<span class="lr-main"><div class="lr-title">${esc(nameOf(r.user_id))} · ${fmtH(r.hours)} hrs${r.helper_hours > 0 ? ` + ${fmtH(r.helper_hours)} helper` : ""}</div>
@@ -116,6 +121,7 @@ view("alltickets", { tab: "tickets", async render(main, p) {
     toast(ok ? "Approved" : "Sent back to fix"); go("alltickets", p);
   };
   const all = $("atAll"); if (all) all.onclick = async () => { setLoading(all, true); await sb.from("tickets").update({ status: "approved" }).in("id", rows.map(r => r.id)); toast("All approved"); go("alltickets", p); };
+  const xl = $("atXls"); if (xl) xl.onclick = exportSheet;
   const inv = $("atInv"); if (inv) inv.onclick = async () => {
     setLoading(inv, true);
     const { data: res, error } = await sb.functions.invoke("qbo", { body: { action: "draft_invoices", company_id: S.company.id, ticket_ids: rows.map(r => r.id) } });
@@ -254,29 +260,73 @@ view("formsettings", { tab: "more", async render(main) {
   });
 } });
 
-// ---------- QuickBooks ----------
-view("integrations", { tab: "more", async render(main) {
+// ---------- Books: QuickBooks, Excel or Google Sheets ----------
+const FEED = `${CONFIG.url}/functions/v1/sheets`;
+const FEED_TABS = [["tickets", "Field tickets", "Every ticket with rate and amount"], ["trucks", "By truck", "Hours, billed and fuel per unit"], ["clients", "By client", "What each client owes"], ["fuel", "Fuel", "Fill-ups by truck"], ["receipts", "Receipts", "Company expenses"]];
+const BOOKS = [{ value: "quickbooks", label: "QuickBooks Online" }, { value: "excel", label: "Excel" }, { value: "sheets", label: "Google Sheets" }];
+export const booksLabel = b => (BOOKS.find(x => x.value === b) || BOOKS[0]).label;
+const copyText = async (t, ok = "Copied") => { try { await navigator.clipboard.writeText(t); toast(ok, "check"); } catch (e) { prompt("Copy this:", t); } };
+
+view("integrations", { tab: "more", async render(main, p) {
   if (!guard(main)) return;
   await loadCompany(S.company.id);
-  const co = S.company;
-  main.innerHTML = `${TopBar({ title: "QuickBooks", back: "more" })}
-    ${Card(`<div class="row between"><div><div class="t-label">QuickBooks Online</div><div class="t-title" style="margin-top:6px">${co.qbo_connected ? "Connected" : "Not connected"}</div>${co.qbo_company_name ? `<div class="t-small" style="margin-top:2px">${esc(co.qbo_company_name)}</div>` : ""}</div>${co.qbo_connected ? StatusBadge("Live", "ok", "check") : ""}</div>
+  const co = S.company, books = p.books || co.books || "quickbooks";
+  main.innerHTML = `${TopBar({ title: "Books", back: "more" })}
+    <p class="t-body" style="margin:4px 0 12px">Where approved tickets, fuel and receipts go. You can switch any time.</p>
+    ${RadioList("books", BOOKS, books)}
+    <div id="bkPanel" style="margin-top:20px"></div><p class="form-msg" id="qbMsg"></p>`;
+  main.addEventListener("radio", async e => {
+    if (e.detail === co.books) return go("integrations");
+    const { error } = await sb.from("companies").update({ books: e.detail }).eq("id", co.id);
+    if (error) return toast("Couldn't save. Try again.", "alert");
+    toast(`Books set to ${booksLabel(e.detail)}`, "check"); go("integrations", { books: e.detail });
+  });
+  const panel = $("bkPanel");
+
+  if (books === "quickbooks") {
+    panel.innerHTML = `${Card(`<div class="row between"><div><div class="t-label">QuickBooks Online</div><div class="t-title" style="margin-top:6px">${co.qbo_connected ? "Connected" : "Not connected"}</div>${co.qbo_company_name ? `<div class="t-small" style="margin-top:2px">${esc(co.qbo_company_name)}</div>` : ""}</div>${co.qbo_connected ? StatusBadge("Live", "ok", "check") : ""}</div>
       ${co.qbo_connected ? "" : `<p class="t-body" style="margin-top:12px">Connect once. Approved tickets become invoice drafts and receipts become expenses with the photo attached. Nothing is ever sent to a client without you.</p>`}`, { cls: co.qbo_connected ? "accent-card" : "" })}
-    ${co.qbo_connected ? `${Section("Match your clients")}<p class="t-body" style="margin:-4px 0 12px">Pick the QuickBooks customer for each client so invoices land in the right place.</p><div id="qbMap">${Skeleton(3)}</div>
-      <div style="margin-top:20px">${Button("Disconnect", { variant: "danger", id: "qbOff" })}</div>` : `<div style="margin-top:16px">${PrimaryButton("Connect QuickBooks", { id: "qbOn", icon: "link" })}</div>`}<p class="form-msg" id="qbMsg"></p>`;
-  const on = $("qbOn"); if (on) on.onclick = async () => {
-    setLoading(on, true);
-    const { data, error } = await sb.functions.invoke("qbo", { body: { action: "connect_url", company_id: co.id, return_to: location.origin + location.pathname } });
-    setLoading(on, false);
-    if (error || !data || !data.url) return msg("qbMsg", (data && data.error) || "QuickBooks connection isn't switched on yet.", "bad");
-    location.href = data.url;
-  };
-  const off = $("qbOff"); if (off) off.onclick = async () => { if (!confirm("Disconnect QuickBooks?")) return; setLoading(off, true); await sb.functions.invoke("qbo", { body: { action: "disconnect", company_id: co.id } }); go("integrations"); };
-  if (co.qbo_connected) {
-    const { data } = await sb.functions.invoke("qbo", { body: { action: "customers", company_id: co.id } });
-    const cust = (data && data.customers) || [];
-    $("qbMap").innerHTML = S.clients.length ? S.clients.map(c => Select({ id: "map-" + c.id, label: c.name, options: cust.map(q => ({ value: q.id, label: q.name })), value: c.qbo_customer_id || "", placeholder: "Create new in QuickBooks" })).join("")
-      : EmptyState({ icon: "users", title: "No clients yet", text: "Add clients in Company settings first." });
-    $("qbMap").onchange = async e => { const id = e.target.id.replace("map-", ""); await sb.from("clients").update({ qbo_customer_id: e.target.value || null }).eq("id", id); await loadCompany(co.id); toast("Saved"); };
+      ${co.qbo_connected ? `${Section("Match your clients")}<p class="t-body" style="margin:-4px 0 12px">Pick the QuickBooks customer for each client so invoices land in the right place.</p><div id="qbMap">${Skeleton(3)}</div>
+        <div style="margin-top:20px">${Button("Disconnect", { variant: "danger", id: "qbOff" })}</div>` : `<div style="margin-top:16px">${PrimaryButton("Connect QuickBooks", { id: "qbOn", icon: "link" })}</div>`}
+      <div style="margin-top:12px">${SecondaryButton("Download Excel too", { id: "bkXls", icon: "upload" })}</div>`;
+    const on = $("qbOn"); if (on) on.onclick = async () => {
+      setLoading(on, true);
+      const { data, error } = await sb.functions.invoke("qbo", { body: { action: "connect_url", company_id: co.id, return_to: location.origin + location.pathname } });
+      setLoading(on, false);
+      if (error || !data || !data.url) return msg("qbMsg", (data && data.error) || "QuickBooks connection isn't switched on yet.", "bad");
+      location.href = data.url;
+    };
+    const off = $("qbOff"); if (off) off.onclick = async () => { if (!confirm("Disconnect QuickBooks?")) return; setLoading(off, true); await sb.functions.invoke("qbo", { body: { action: "disconnect", company_id: co.id } }); go("integrations"); };
+    if (co.qbo_connected) {
+      const { data } = await sb.functions.invoke("qbo", { body: { action: "customers", company_id: co.id } });
+      const cust = (data && data.customers) || [];
+      $("qbMap").innerHTML = S.clients.length ? S.clients.map(c => Select({ id: "map-" + c.id, label: c.name, options: cust.map(q => ({ value: q.id, label: q.name })), value: c.qbo_customer_id || "", placeholder: "Create new in QuickBooks" })).join("")
+        : EmptyState({ icon: "users", title: "No clients yet", text: "Add clients in Company settings first." });
+      $("qbMap").onchange = async e => { const id = e.target.id.replace("map-", ""); await sb.from("clients").update({ qbo_customer_id: e.target.value || null }).eq("id", id); await loadCompany(co.id); toast("Saved"); };
+    }
+  } else {
+    const sheets = books === "sheets";
+    panel.innerHTML = `${sheets
+      ? Card(`<div class="t-label">Google Sheets</div><div class="t-title" style="margin-top:6px">Live link</div><p class="t-body" style="margin-top:8px">Your Google Sheet pulls tickets, trucks, clients, fuel and receipts straight from ${esc(CONFIG.product)}. It updates itself about every hour. Nothing to download.</p>`, { cls: "accent-card" })
+      : Card(`<div class="t-label">Excel</div><div class="t-title" style="margin-top:6px">Download any time</div><p class="t-body" style="margin-top:8px">One file with every ticket, rates and amounts, a tab for each truck, totals by truck and client, fuel and receipts.</p>
+        <div style="margin-top:14px">${PrimaryButton("Download Excel", { id: "bkXls", icon: "upload" })}</div>`, { cls: "accent-card" })}
+      ${Section(sheets ? "Set it up once" : "Or keep Excel live")}
+      ${sheets ? `<ol class="steps"><li>Open a new Google Sheet. ${Button("Open Google Sheets", { variant: "secondary", size: "sm", id: "bkNew", icon: "link", full: false })}</li><li>Copy a formula below and paste it in cell A1. Add a tab at the bottom for each one you want.</li><li>That's it. The sheet refreshes on its own.</li></ol>`
+        : `<p class="t-body" style="margin:-4px 0 12px">In Excel: Data › Get Data › From Web, paste a link below, then Load. Hit Refresh All whenever you want the latest.</p>`}
+      <div id="bkFeeds">${Skeleton(3)}</div>
+      ${Banner(`Anyone with these links can see your numbers. Only share them with people you'd show your books to.`, { tone: "warn", icon: "lock" })}
+      <div class="btn-row" style="margin-top:14px">${sheets ? SecondaryButton("Download Excel", { id: "bkXls", icon: "upload" }) : ""}${Button("Turn off old links", { variant: "secondary", id: "bkRot", icon: "refresh" })}</div>`;
+    const newBtn = $("bkNew"); if (newBtn) newBtn.onclick = () => window.open("https://sheets.new", "_blank", "noopener");
+    const showFeeds = async rotate => {
+      const { data: tok, error } = await sb.rpc("sheet_feed_token", { cid: co.id, rotate: !!rotate });
+      if (error || !tok) { $("bkFeeds").innerHTML = Banner("Couldn't make your link. Check your signal and try again.", { tone: "warn" }); return; }
+      const link = tab => `${FEED}?t=${tok}&tab=${tab}&days=365`;
+      const val = tab => sheets ? `=IMPORTDATA("${link(tab)}")` : link(tab);
+      $("bkFeeds").innerHTML = List(FEED_TABS.map(([k, t, s]) => ListRow({ icon: "file", title: t, sub: s, end: Button("Copy", { variant: "secondary", size: "sm", full: false, data: { "data-copy": k } }) })));
+      $("bkFeeds").onclick = e => { const b = e.target.closest("[data-copy]"); if (b) copyText(val(b.dataset.copy), sheets ? "Formula copied" : "Link copied"); };
+    };
+    showFeeds(false);
+    $("bkRot").onclick = async () => { if (!confirm("Turn off the old links? Any sheet using them stops updating until you paste the new ones.")) return; await showFeeds(true); toast("New links made", "check"); };
   }
+  const xls = $("bkXls"); if (xls) xls.onclick = exportSheet;
 } });

@@ -358,12 +358,12 @@ view("more", { async render(main) {
       ListRow({ icon: "users", title: "Crew today", sub: "Who's done their forms", go: "crewtoday" }),
       ListRow({ icon: "alert", title: "Truck defects", sub: "From Pre-Trips, with photos", go: "defects" }),
       ListRow({ icon: "megaphone", title: "Dispatch", sub: "Send orders to the crew", go: "dispatch" }),
-      ListRow({ icon: "ticket", title: "Field tickets", sub: "Approve, then draft invoices", go: "alltickets" }),
+      ListRow({ icon: "ticket", title: "Field tickets", sub: "Approve, then invoice or export", go: "alltickets" }),
       ListRow({ icon: "receipt", title: "Receipts", sub: "Into QuickBooks with the photo", go: "receipts" })])}
       ${Section("Company")}${List([
       ListRow({ icon: "users", title: "Team & invites", sub: "Add crew, set admins", go: "team" }),
       ListRow({ icon: "gear", title: "Company settings", sub: "Logo, look, trucks, clients, forms, pay", go: "settings" }),
-      ListRow({ icon: "link", title: "QuickBooks", sub: S.company.qbo_connected ? "Connected" : "Connect your books", go: "integrations" })])}` : ""}
+      ListRow({ icon: "link", title: "Books", sub: (S.company.books || "quickbooks") === "quickbooks" ? (S.company.qbo_connected ? "QuickBooks · connected" : "QuickBooks, Excel or Google Sheets") : (S.company.books === "sheets" ? "Google Sheets · live link" : "Excel"), go: "integrations" })])}` : ""}
     <div style="margin-top:24px">${SecondaryButton("Account & notifications", { id: "moAcct", icon: "user" })}</div>`;
   $("moAcct").onclick = accountSheet;
 } });

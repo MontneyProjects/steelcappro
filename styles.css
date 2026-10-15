@@ -536,3 +536,9 @@ video.media { width: 240px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 .select:has(option[value=""]:checked) { color: var(--text-4); font-weight: 500; }
+
+/* numbered setup steps */
+.steps { list-style: none; counter-reset: st; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
+.steps li { counter-increment: st; position: relative; padding: 2px 0 0 40px; color: var(--text-2); font-size: 15px; line-height: 1.45; }
+.steps li::before { content: counter(st); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--card-2, var(--card)); border: 1px solid var(--border-2); color: var(--text); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.steps li .btn { margin-top: 8px; display: inline-flex; }
