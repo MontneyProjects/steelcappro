@@ -25,7 +25,9 @@ Steelcap Pro is used by companies ("Customers") and the people they invite, such
 
 **Device and usage information.** Basic technical data our hosting providers log automatically, such as IP address, browser and device type, and the date and time of requests. If you turn on notifications, we store a push token for your device so we can send you dispatches and messages.
 
-We do not collect your precise location in the background, and we do not use advertising trackers inside the app.
+**Analytics.** Our website and app use Google Analytics to count visits and see which pages and features get used. It records things like pages viewed, device type, and approximate location (city or region, based on IP address), using cookies or similar storage. We use this only to understand and improve Steelcap Pro, not to show you ads. You can block it with your browser's privacy settings or Google's opt-out add-on.
+
+We do not collect your precise location in the background, and we do not sell your information to advertisers.
 
 ## How we use it
 - To run the app: show your company's records to the right people, send dispatches and notifications, and produce exports.
@@ -38,7 +40,7 @@ We do not sell personal information, and we do not use QuickBooks data for any p
 
 ## Who we share it with
 - **Inside your company.** Owners and admins of your company account can see the records crew members enter for that company. Crew see what their role allows.
-- **Service providers** that host and run Steelcap Pro for us, such as cloud database and file storage, website hosting, email and push-notification delivery, payment processing and AI providers. They may only use the information to provide their service to us.
+- **Service providers** that host and run Steelcap Pro for us, such as cloud database and file storage, website hosting, website analytics (Google Analytics), email and push-notification delivery, payment processing and AI providers. They may only use the information to provide their service to us.
 - **Intuit (QuickBooks) or Google**, only when a Customer connects them, and only the records needed to do what the Customer asked.
 - **When the law requires it**, or to protect the rights, safety and property of our users or the public.
 - **If our business is sold or merged**, the information would transfer to the new owner under this policy.
@@ -146,7 +148,10 @@ def md(text):
     return "\n".join(out)
 
 PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-6CR29NN6GY"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments);}}gtag('js',new Date());gtag('config','G-6CR29NN6GY');</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} | Steelcap Pro</title>
 <meta name="description" content="{title} for Steelcap Pro.">
 <link rel="canonical" href="https://steelcappro.com/{slug}/">
