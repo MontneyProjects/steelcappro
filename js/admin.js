@@ -4,7 +4,7 @@ import { sb, S, $, esc, toast, msg, svg, view, go, isAdmin, isOwner, today, iso,
 import { TopBar, Section, StickyBar, Card, MetricCard, ListRow, List, Avatar, StatusBadge, EmptyState, Skeleton, Banner,
   PrimaryButton, SecondaryButton, Button, IconButton, FormField, TextArea, Select, SegmentedControl, Chips, PeoplePicker, Capture, Setting, Toggle,
   setLoading, fieldError, clearErrors, segValue, peopleValues, RadioList } from "./ui.js";
-import { exportSheet } from "./export.js";
+import { exportSheet, rateFor, ranges } from "./export.js";
 
 const guard = main => { if (isAdmin()) return true; main.innerHTML = `${TopBar({ title: "Admins only", back: "home" })}${EmptyState({ icon: "lock", title: "Admins only", text: "Ask your boss if you need access to this." })}`; return false; };
 const shortDate = k => new Date(k + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" });
@@ -329,4 +329,51 @@ view("integrations", { tab: "more", async render(main, p) {
     $("bkRot").onclick = async () => { if (!confirm("Turn off the old links? Any sheet using them stops updating until you paste the new ones.")) return; await showFeeds(true); toast("New links made", "check"); };
   }
   const xls = $("bkXls"); if (xls) xls.onclick = exportSheet;
+} });
+
+// ---------- trucks & billing: what each truck billed, burned in fuel, and kept ----------
+view("billing", { tab: "more", async render(main, p) {
+  if (!guard(main)) return;
+  const R = ranges(), key = p.range || "period", [from, to] = R[key].v;
+  main.innerHTML = `${TopBar({ title: "Trucks & billing", back: "more" })}
+    <div style="margin:8px 0 6px">${SegmentedControl("blRange", [{ value: "period", label: "This period" }, { value: "lastperiod", label: "Last period" }, { value: "month", label: "Month" }], key)}</div>
+    <p class="t-small" style="margin:0 0 14px">${shortDate(from)} to ${shortDate(to)} · same rates as your invoices</p>
+    <div id="blBody">${Skeleton(5)}</div>`;
+  main.addEventListener("seg", e => go("billing", { range: e.detail }));
+  const cid = S.company.id;
+  const [tk, fu] = await Promise.all([
+    sb.from("tickets").select("*").eq("company_id", cid).neq("status", "rejected").gte("work_date", from).lte("work_date", to).order("work_date"),
+    sb.from("fuel_logs").select("truck_id,total,fill_date").eq("company_id", cid).gte("fill_date", from).lte("fill_date", to)]);
+  const tickets = tk.data || [], fuel = fu.data || [];
+  const amt = t => (Number(t.hours || 0) + Number(t.standby_hours || 0)) * rateFor(t);
+  const byT = {}, byC = {};
+  const T = id => (byT[id || "none"] = byT[id || "none"] || { id: id || "none", hrs: 0, billed: 0, fuel: 0, n: 0, days: new Set(), list: [] });
+  tickets.forEach(t => { const x = T(t.truck_id); x.hrs += Number(t.hours || 0); x.billed += amt(t); x.n++; x.days.add(t.work_date); x.list.push(t);
+    const c = (byC[t.client_id || "none"] = byC[t.client_id || "none"] || { hrs: 0, billed: 0 }); c.hrs += Number(t.hours || 0); c.billed += amt(t); });
+  fuel.forEach(f => { T(f.truck_id).fuel += Number(f.total || 0); });
+  const tot = Object.values(byT).reduce((a, x) => ({ hrs: a.hrs + x.hrs, billed: a.billed + x.billed, fuel: a.fuel + x.fuel }), { hrs: 0, billed: 0, fuel: 0 });
+  const waiting = tickets.filter(t => t.status === "submitted").length;
+  const unit = id => id === "none" ? "No truck" : "Truck " + (truckName(id) || "?");
+  const kind = id => (S.trucks.find(x => x.id === id) || {}).kind || "";
+  const rows = Object.values(byT).sort((a, b) => b.billed - a.billed);
+  const noRate = tickets.filter(t => !rateFor(t)).length;
+  $("blBody").innerHTML = tickets.length || fuel.length ? `
+    <div class="grid-2">${MetricCard({ label: "Billed", value: money(tot.billed), sub: "before GST", icon: "dollar" })}${MetricCard({ label: "Hours", value: fmtH(tot.hrs), sub: tickets.length + " tickets", icon: "clock" })}
+      ${MetricCard({ label: "Fuel", value: money(tot.fuel), sub: fuel.length + " fill-ups", icon: "fuel" })}${MetricCard({ label: "Billed minus fuel", value: money(tot.billed - tot.fuel), tone: "accent", icon: "truck" })}</div>
+    ${waiting ? `<div style="margin-top:12px">${Banner(`Includes <b>${waiting} ticket${waiting > 1 ? "s" : ""}</b> still waiting for your approval.`, { icon: "info", tone: "warn" })}</div>` : ""}
+    ${noRate ? `<div style="margin-top:12px">${Banner(`<b>${noRate} ticket${noRate > 1 ? "s have" : " has"} no rate.</b> Add client or truck rates in Company settings so they count.`, { icon: "alert", tone: "warn" })}</div>` : ""}
+    ${Section("By truck")}${List(rows.map(x => ListRow({ icon: "truck", title: unit(x.id) + (kind(x.id) ? " · " + kind(x.id) : ""),
+      sub: `${fmtH(x.hrs)} hrs · ${x.days.size} day${x.days.size === 1 ? "" : "s"}`,
+      end: `<span style="text-align:right;display:block"><b>${money(x.billed)}</b><small style="display:block;color:var(--text-3)">fuel ${money(x.fuel)}</small></span>`, data: { "data-tr": x.id } })))}
+    ${Section("By client")}${List(Object.entries(byC).sort((a, b) => b[1].billed - a[1].billed).map(([c, x]) => ListRow({ icon: "building", title: c === "none" ? "No client picked" : clientName(c), sub: fmtH(x.hrs) + " hrs", end: `<b>${money(x.billed)}</b>` })))}
+    <div style="margin-top:20px">${SecondaryButton("Download Excel", { id: "blXls", icon: "upload" })}</div>`
+    : EmptyState({ icon: "truck", title: "Nothing in these dates", text: "Field tickets and fuel show up here as the crew sends them." });
+  const x = $("blXls"); if (x) x.onclick = exportSheet;
+  $("blBody").addEventListener("click", e => {
+    const b = e.target.closest("[data-tr]"); if (!b) return;
+    const t = byT[b.dataset.tr];
+    sheet(`<h3>${esc(unit(t.id))}</h3><p class="sh-sub">${shortDate(from)} to ${shortDate(to)} · ${fmtH(t.hrs)} hrs · ${money(t.billed)} billed · ${money(t.fuel)} fuel · <b>${money(t.billed - t.fuel)} after fuel</b></p>
+      ${List(t.list.map(k => ListRow({ title: `${shortDate(k.work_date)} · ${clientName(k.client_id) || "No client"}`, sub: `${nameOf(k.user_id)} · ${fmtH(k.hours)} hrs${Number(k.helper_hours) > 0 ? " + helper" : ""} · $${rateFor(k)}/hr${k.status === "submitted" ? " · waiting" : ""}`, end: `<b>${money(amt(k))}</b>` })))}
+      <div style="height:12px"></div>${SecondaryButton("Close", { id: "trClose" })}`, el => { el.querySelector("#trClose").onclick = closeSheet; });
+  });
 } });

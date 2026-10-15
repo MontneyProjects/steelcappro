@@ -14,7 +14,7 @@ export function rateFor(t) {
 }
 const r2 = n => Math.round(n * 100) / 100;
 
-function ranges() {
+export function ranges() {
   const d = new Date(), y = d.getFullYear(), m = d.getMonth();
   const per = (dt) => dt.getDate() <= 15 ? [iso(new Date(dt.getFullYear(), dt.getMonth(), 1)), iso(new Date(dt.getFullYear(), dt.getMonth(), 15))] : [iso(new Date(dt.getFullYear(), dt.getMonth(), 16)), iso(new Date(dt.getFullYear(), dt.getMonth() + 1, 0))];
   const cur = per(d), prevEnd = new Date(cur[0] + "T00:00:00"); prevEnd.setDate(prevEnd.getDate() - 1);

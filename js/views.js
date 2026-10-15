@@ -95,7 +95,7 @@ view("home", { async render(main) {
       ${MetricCard({ label: "Truck defects", value: String(def.count || 0), sub: def.count ? "open" : "all clear", icon: "alert", go: "defects", tone: def.count ? "danger" : "" })}
       ${MetricCard({ label: "Dispatch", value: String(disp.count || 0), sub: "upcoming orders", icon: "megaphone", go: "dispatch" })}
       ${MetricCard({ label: "Field tickets", value: String(pend.count || 0), sub: "to approve", icon: "ticket", go: "alltickets", tone: pend.count ? "accent" : "" })}
-      </div><div style="margin-top:12px">${List([ListRow({ icon: "receipt", title: "Receipts", sub: `${rec.count || 0} this month`, go: "receipts" })])}</div>`;
+      </div><div style="margin-top:12px">${List([ListRow({ icon: "truck", title: "Trucks & billing", sub: "Billed, fuel and what's left, by truck", go: "billing" }), ListRow({ icon: "receipt", title: "Receipts", sub: `${rec.count || 0} this month`, go: "receipts" })])}</div>`;
   }
 } });
 
@@ -359,6 +359,7 @@ view("more", { async render(main) {
       ListRow({ icon: "alert", title: "Truck defects", sub: "From Pre-Trips, with photos", go: "defects" }),
       ListRow({ icon: "megaphone", title: "Dispatch", sub: "Send orders to the crew", go: "dispatch" }),
       ListRow({ icon: "ticket", title: "Field tickets", sub: "Approve, then invoice or export", go: "alltickets" }),
+      ListRow({ icon: "truck", title: "Trucks & billing", sub: "What each truck billed, fuel and what's left", go: "billing" }),
       ListRow({ icon: "receipt", title: "Receipts", sub: "Into QuickBooks with the photo", go: "receipts" })])}
       ${Section("Company")}${List([
       ListRow({ icon: "users", title: "Team & invites", sub: "Add crew, set admins", go: "team" }),
