@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /docs/
+Disallow: /supabase/
+Disallow: /site-src/
+
+Sitemap: https://steelcappro.com/sitemap.xml
