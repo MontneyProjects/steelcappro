@@ -3,7 +3,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 export const CONFIG = {
   product: "Steelcap Pro",
-  tagline: "Built for the field",            // product name: change here and in index.html <title>
+  tagline: "Built for the field",   // product name: change here and in index.html <title>
+  oauth: { apple: false, google: false },   // switch on once Apple / Google sign-in is set up in Supabase
   url: "https://hsyscwheyixsxzqahvbr.supabase.co",
   key: "sb_publishable_fonqS_pw5_MOpi-Hvbs24A_N_NA5-TU",   // public key, safe in the browser
   vapid: "BFPgfyJrT6phvRD61mehf8KxxW6F9UFhAKtn_Q9gBbNNcZQ6S6lZYOlRZSC9EAJxBpjGaztQdYgJz4iFyHqFMos",   // public push key, safe in the browser
@@ -34,8 +35,8 @@ export const clientName = id => { const c = S.clients.find(x => x.id === id); re
 export const timeOf = t => { const d = new Date(t), now = new Date(); return iso(d) === iso(now) ? d.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" }) : (now - d < 6 * 86400000 ? d.toLocaleDateString("en-CA", { weekday: "short" }) : d.toLocaleDateString("en-CA", { month: "short", day: "numeric" })); };
 export const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-export const toast = t => { const el = $("toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2800); };
-export const msg = (el, t, kind) => { if (typeof el === "string") el = $(el); if (!el) return; el.textContent = t || ""; el.className = "msg" + (kind ? " " + kind : ""); };
+export const toast = (t, icon = "check") => { const el = $("toast"); el.innerHTML = `${icon ? svg(icon, 2.4) : ""}<span>${esc(t)}</span>`; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2800); };
+export const msg = (el, t, kind) => { if (typeof el === "string") el = $(el); if (!el) return; el.textContent = t || ""; el.className = "form-msg" + (kind ? " " + kind : ""); };
 
 // ---------- icons ----------
 const ICONS = {
@@ -64,24 +65,49 @@ const ICONS = {
   crown: '<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>',
   dollar: '<path d="M12 2v20M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.6 7 6.8c0 4.7 10 2.4 10 7.2 0 2.3-2.2 3.5-5 3.5s-5-1.2-5-3.2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  minus: '<path d="M5 12h14"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
+  award: '<circle cx="12" cy="9" r="6"/><path d="M8.5 14.5L7 22l5-3 5 3-1.5-7.5"/>',
+  cloudoff: '<path d="M2 2l20 20"/><path d="M5.8 5.8A7 7 0 0 0 6.6 19H17a5 5 0 0 0 2.9-.9M10.4 4.2A7 7 0 0 1 18 9a4.5 4.5 0 0 1 3.3 7.6"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  apple: '<path d="M16.4 12.6c0-2.5 2.1-3.7 2.2-3.8-1.2-1.7-3-2-3.7-2-1.6-.2-3.1.9-3.9.9s-2-.9-3.4-.9C5.8 6.9 4 8 3 9.8c-1.9 3.4-.5 8.4 1.4 11.1.9 1.3 2 2.8 3.4 2.8s1.9-.9 3.5-.9 2.1.9 3.5.9 2.4-1.4 3.3-2.7c1-1.5 1.5-3 1.5-3.1 0 0-2.8-1.1-2.8-4.3zM13.8 5.1c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.2 1.1.1 2.3-.6 3-1.5z" fill="currentColor" stroke="none"/>',
+  google: '<path d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z" fill="#4285F4" stroke="none"/><path d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" fill="#34A853" stroke="none"/><path d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z" fill="#FBBC05" stroke="none"/><path d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.4 3-4.1 5.6-4.1z" fill="#EA4335" stroke="none"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
 };
 export const svg = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.9}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ""}</svg>`;
 
 // ---------- theming ----------
 const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const lum = ([r, g, b]) => { const f = c => { c /= 255; return c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const hex = c => "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
+// A company's accent colour drops into the same slots as Steelcap teal. Text on the accent and accent-coloured text
+// are adjusted until they pass contrast on that look's background.
 export function applyTheme(theme, accent) {
   const r = document.documentElement;
   r.dataset.theme = theme || "steelcap";
+  ["--accent", "--accent-text", "--accent-ink", "--acc-rgb"].forEach(p => r.style.removeProperty(p));
   const rgb = hexRgb(accent);
   if (rgb) {
-    r.style.setProperty("--gold", accent); r.style.setProperty("--gold2", accent); r.style.setProperty("--acc-rgb", rgb.join(","));
-    const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
-    r.style.setProperty("--on-acc", lum > 0.6 ? "#111111" : "#ffffff");
-  } else ["--gold", "--gold2", "--acc-rgb", "--on-acc"].forEach(p => r.style.removeProperty(p));
+    const bg = hexRgb(getComputedStyle(r).getPropertyValue("--bg").trim()) || [11, 14, 16];
+    const light = lum(bg) > .5;
+    r.style.setProperty("--accent", accent);
+    r.style.setProperty("--acc-rgb", rgb.join(","));
+    r.style.setProperty("--accent-ink", contrast(rgb, [255, 255, 255]) >= contrast(rgb, [10, 12, 14]) ? "#FFFFFF" : "#0A0C0E");
+    let t = rgb, i = 0; while (contrast(t, bg) < 4.5 && i < 10) { t = mix(t, light ? [0, 0, 0] : [255, 255, 255], .12); i++; }
+    r.style.setProperty("--accent-text", hex(t));
+  }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(r).getPropertyValue("--bg").trim() || "#0b0e10";
 }
-export const logoUrl = path => path ? `${CONFIG.url}/storage/v1/object/public/logos/${path}` : "";
+export const logoUrl = path => !path ? "" : /^https?:/.test(path) ? path : `${CONFIG.url}/storage/v1/object/public/logos/${path}`;
 
 // ---------- sheets (bottom pop-ups) ----------
 export function sheet(html, onMount) {
@@ -133,18 +159,19 @@ export function view(name, def) { VIEWS[name] = def; }
 const TAB_OF = n => (VIEWS[n] && VIEWS[n].tab) || n;
 export async function go(name, params = {}) {
   if (!VIEWS[name]) name = "home";
+  const def = VIEWS[name];
   S.view = name; S.params = params;
-  const main = $("main");
-  main.scrollTop = 0; main.removeAttribute("style"); main.onclick = null; main.onchange = null;
-  main.className = "view" + (VIEWS[name].cls ? " " + VIEWS[name].cls : "");
-  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === TAB_OF(name)));
-  $("tabs").hidden = !!VIEWS[name].noTabs;
+  // swap in a fresh <main> so listeners from the previous screen never pile up
+  const oldMain = $("main"), main = document.createElement("main");
+  main.id = "main"; oldMain.replaceWith(main);
+  main.className = "view" + (def.cls ? " " + def.cls : "") + (def.noTabs ? " no-nav" : "") + (def.sticky ? " has-sticky" : "");
+  document.body.classList.toggle("no-nav-mode", !!def.noTabs);
+  document.querySelectorAll(".bottom-nav button").forEach(b => b.dataset.tab === TAB_OF(name) ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $("tabs").hidden = !!def.noTabs;
   main.innerHTML = "";
-  try { await VIEWS[name].render(main, params); } catch (e) { console.error(e); main.innerHTML = `<p class="empty">Something went wrong loading this screen. Pull down or go back and try again.</p>`; }
+  try { await def.render(main, params); }
+  catch (e) { console.error(e); main.innerHTML = `<div class="empty" style="margin-top:80px"><div class="e-ic">${svg("alert")}</div><b>Couldn't load this screen</b><p>Check your signal and try again.</p><button class="btn secondary" type="button" data-go="${esc(name)}">Try again</button></div>`; }
 }
-export const back = (to = "home") => `<button class="back" type="button" data-go="${to}" aria-label="Back">${svg("left")}</button>`;
-export const head = (eyebrow, title, side = "") => `<div class="pagehead"><div><div class="eyebrow">${esc(eyebrow)}</div><h1 class="h1">${esc(title)}</h1></div>${side ? `<div class="side">${side}</div>` : ""}</div>`;
-
 // Global click routing: any element with data-go="view" navigates.
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (!g) return;

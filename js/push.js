@@ -27,7 +27,7 @@ export async function refreshPush() {
 }
 export async function pushRow() {
   const state = on() ? "On for this phone" : (IOS && !STANDALONE) ? "Add to home screen first" : (supported() && Notification.permission === "denied") ? "Blocked in phone settings" : "Off";
-  return `<div class="setrow"><span>Notifications<small>${state}</small></span>${on() ? "" : `<button class="link" type="button" id="pushOn">Turn on</button>`}</div>`;
+  return `<div class="setting"><span class="s-main"><b>Notifications</b><small>${state}</small></span>${on() ? "" : `<button class="link" type="button" id="pushOn">Turn on</button>`}</div>`;
 }
 if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("message", e => {
   if (e.data && e.data.type === "open") { const u = new URL(e.data.url); const c = u.searchParams.get("chat"), v = u.searchParams.get("v"); import("./core.js").then(m => c ? m.go("thread", { id: c }) : v && m.go(v)); }

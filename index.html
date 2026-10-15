@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0e10">
-<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0B0E10">
+<meta name="description" content="Steelcap Pro runs small oilfield crews from the phone: safety forms, field tickets, dispatch, chat and the books.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Steelcap Pro">
 <title>Steelcap Pro</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="favicon.png">
@@ -17,23 +18,24 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="splash"><div class="mark"><img src="icon-192.png" alt="" style="width:96px;height:96px;border-radius:22px;margin:0 auto 18px"><div class="pro" id="splashName">STEELCAP PRO</div><div class="splashtag" id="splashTag">Built for the field</div><div class="bar"><i></i></div></div></div>
+<div id="splash"><div><img class="mark" src="mark.png" alt=""><div class="wordmark" style="text-align:center">STEELCAP <b>PRO</b></div><div class="tagline" style="text-align:center">Built for the field</div><div class="bar"><i></i></div></div></div>
 
-<!-- signed-out screens and the company setup wizard render here -->
+<!-- signed-out screens and the company setup wizard -->
 <div id="gate" class="gate" hidden></div>
 
 <!-- the app -->
 <div id="app" hidden>
   <main id="main" class="view"></main>
-  <nav class="tabs" id="tabs" aria-label="Main">
-    <button type="button" data-go="home" data-tab="home" aria-selected="true"><span data-i="home"></span>Home</button>
+  <nav class="bottom-nav" id="tabs" aria-label="Main">
+    <button type="button" data-go="home" data-tab="home"><span data-i="home"></span>Home</button>
     <button type="button" data-go="safety" data-tab="safety"><span data-i="shield"></span>Safety</button>
     <button type="button" data-go="tickets" data-tab="tickets"><span data-i="ticket"></span>Tickets</button>
-    <button type="button" data-go="chat" data-tab="chat"><span data-i="chat"></span>Chat<span class="tbadge" id="chatBadge" hidden></span></button>
+    <button type="button" data-go="chat" data-tab="chat"><span data-i="chat"></span>Chat<span class="nav-badge" id="chatBadge" hidden></span></button>
     <button type="button" data-go="more" data-tab="more"><span data-i="grid"></span>More</button>
   </nav>
 </div>
 
+<div class="offline-pill" id="netPill" hidden role="status"></div>
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

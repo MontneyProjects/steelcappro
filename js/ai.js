@@ -1,23 +1,25 @@
 // The built-in AI assistant, and receipt reading (AI first, on-phone text reading as a fallback).
 import { sb, S, $, esc, toast, svg, view, isAdmin, iso, shrinkImage, CONFIG } from "./core.js";
+import { TopBar, Chips } from "./ui.js";
 
 const SUGS_ADMIN = ["Who hasn't done their Pre-Trip today?", "Any open truck defects?", "Whose tickets expire in the next 30 days?", "How many hours did we bill each client this pay period?", "What did fuel cost per truck this month?", "Write a toolbox talk on working near overhead lines"];
 const SUGS_CREW = ["When's my next payday?", "How many hours do I have this pay period?", "When does my H2S expire?", "Write a toolbox talk on cold weather", "What hazards should go on an FLHA for a picker lift?"];
 let history = [];
 
 view("ask", { tab: "more", async render(main) {
-  main.innerHTML = `<div class="pagehead"><div><div class="eyebrow">AI assistant</div><h1 class="h1">Ask ${esc(CONFIG.product)}</h1></div></div>
-    <p class="msg" style="margin-top:8px">It knows your crew's forms, tickets, defects, certs and fuel${isAdmin() ? ", and receipts" : ""}. Ask it like you'd ask an office manager.</p>
-    <div class="ai-msgs" id="aiMsgs"></div><div class="ai-sugs" id="aiSugs">${(isAdmin() ? SUGS_ADMIN : SUGS_CREW).map(s => `<button type="button">${esc(s)}</button>`).join("")}</div>
+  main.style.paddingBottom = "calc(var(--bot) + var(--nav-h) + 96px)";
+  main.innerHTML = `${TopBar({ title: "Ask " + CONFIG.product, back: "more" })}
+    <p class="t-body" style="margin:4px 0 0">It knows your crew's forms, tickets, defects, certificates and fuel${isAdmin() ? ", and receipts" : ""}. Ask it like you'd ask an office manager.</p>
+    <div class="ai-msgs" id="aiMsgs"></div><div class="chips" id="aiSugs" style="margin-top:16px">${(isAdmin() ? SUGS_ADMIN : SUGS_CREW).map(s => `<button type="button" class="chip" style="text-align:left; height:auto; padding:10px 14px">${esc(s)}</button>`).join("")}</div>
     <div style="height:90px"></div>
-    <form class="aibar" id="aiForm"><input id="aiIn" placeholder="Ask anything about your crew" autocomplete="off"><button aria-label="Ask">${svg("send", 2.4)}</button></form>`;
+    <form class="ai-bar" id="aiForm"><input class="input" id="aiIn" placeholder="Ask anything about your crew" autocomplete="off"><button class="send-btn" aria-label="Ask">${svg("send", 2.4)}</button></form>`;
   const box = $("aiMsgs");
   const draw = () => { box.innerHTML = history.map(h => `<div class="${h.role === "user" ? "ai-q" : "ai-a"}">${esc(h.content)}</div>`).join(""); $("aiSugs").hidden = history.length > 0; main.scrollTop = main.scrollHeight; };
   draw();
   const ask = async q => {
     if (!q.trim()) return;
     history.push({ role: "user", content: q.trim() }); draw();
-    box.insertAdjacentHTML("beforeend", `<div class="ai-a" id="aiWait"><span class="reading" style="margin:0"><i></i>Thinking...</span></div>`); main.scrollTop = main.scrollHeight;
+    box.insertAdjacentHTML("beforeend", `<div class="ai-a" id="aiWait"><span class="reading" style="margin:0"><span class="spinner"></span>Thinking...</span></div>`); main.scrollTop = main.scrollHeight;
     const { data, error } = await sb.functions.invoke("ai", { body: { action: "ask", company_id: S.company.id, messages: history.slice(-10), today: iso(new Date()) } });
     $("aiWait")?.remove();
     history.push({ role: "assistant", content: error || !data || data.error ? ((data && data.error) || "I couldn't answer that right now. Try again in a minute.") : data.answer });
