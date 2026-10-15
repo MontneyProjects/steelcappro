@@ -121,7 +121,8 @@ async function portal(req: Request, b: Record<string, any>) {
   const { data: co } = await admin.from("companies").select("stripe_customer_id").eq("id", cid).single();
   if (!co?.stripe_customer_id) throw new Error("No billing account yet");
   const ret = ALLOWED_RETURN.test(b.return_to || "") ? b.return_to : "https://steelcappro.com/app/";
-  const p = await stripe("POST", "billing_portal/sessions", { customer: co.stripe_customer_id, return_url: ret });
+  const s = await secrets();
+  const p = await stripe("POST", "billing_portal/sessions", { customer: co.stripe_customer_id, return_url: ret, ...(s.stripe_portal_config ? { configuration: s.stripe_portal_config } : {}) });
   return { url: p.url };
 }
 
@@ -159,11 +160,51 @@ async function deleteAccount(req: Request, b: Record<string, any>) {
   return { ok: true };
 }
 
+// One-time (idempotent) Stripe setup: product, prices, webhook, customer portal. Needs x-cron-secret.
+async function setSecret(key: string, value: string) {
+  await admin.from("platform_secrets").upsert({ key, value }, { onConflict: "key" }); if (sec) sec[key] = value;
+}
+async function setup(req: Request) {
+  const s = await secrets();
+  if (!s.cron_secret || req.headers.get("x-cron-secret") !== s.cron_secret) throw new Error("Not allowed");
+  const out: Record<string, string> = {};
+  // product
+  const prods = await stripe("GET", "products/search?query=" + encodeURIComponent("metadata['app']:'steelcap'"));
+  const product = prods.data?.[0]?.id || (await stripe("POST", "products", { name: "Steelcap Pro", description: "Field crew app: safety forms, field tickets, dispatch and QuickBooks invoicing.", metadata: { app: "steelcap" } })).id;
+  out.product = product;
+  // prices (by lookup key)
+  for (const [lk, amt, nick, secKey] of [["steelcap_199_cad", 19900, "Up to 20 users", "stripe_price_199"], ["steelcap_249_cad", 24900, "More than 20 users", "stripe_price_249"]] as const) {
+    const found = await stripe("GET", `prices?lookup_keys[]=${lk}&active=true`);
+    const id = found.data?.[0]?.id || (await stripe("POST", "prices", { product, currency: "cad", unit_amount: amt, nickname: nick, lookup_key: lk, recurring: { interval: "month" }, tax_behavior: "exclusive" })).id;
+    await setSecret(secKey, id); out[secKey] = id;
+  }
+  // webhook
+  const url = `${SB_URL}/functions/v1/billing`;
+  const hooks = await stripe("GET", "webhook_endpoints?limit=100");
+  const mine = (hooks.data || []).filter((h: any) => h.url === url);
+  if (!mine.length || !s.stripe_webhook_secret) {
+    for (const h of mine) await stripe("DELETE", `webhook_endpoints/${h.id}`);
+    const h = await stripe("POST", "webhook_endpoints", { url, description: "Steelcap Pro app", enabled_events: ["checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"] });
+    await setSecret("stripe_webhook_secret", h.secret); out.webhook = h.id;
+  } else out.webhook = mine[0].id + " (kept)";
+  // customer portal
+  if (!s.stripe_portal_config) {
+    const pc = await stripe("POST", "billing_portal/configurations", {
+      business_profile: { headline: "Steelcap Pro billing", privacy_policy_url: "https://steelcappro.com/privacy/", terms_of_service_url: "https://steelcappro.com/terms/" },
+      features: { invoice_history: { enabled: true }, payment_method_update: { enabled: true }, customer_update: { enabled: true, allowed_updates: ["email", "address", "name", "tax_id"] }, subscription_cancel: { enabled: true, mode: "at_period_end" } },
+      default_return_url: "https://steelcappro.com/app/",
+    });
+    await setSecret("stripe_portal_config", pc.id); out.portal = pc.id;
+  } else out.portal = s.stripe_portal_config + " (kept)";
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.headers.get("stripe-signature")) return webhook(req);
   try {
     const b = await req.json().catch(() => ({}));
+    if (b.action === "setup") return json(await setup(req));
     if (b.action === "checkout") return json(await checkout(req, b));
     if (b.action === "portal") return json(await portal(req, b));
     if (b.action === "sync") return json(await sync(req, b));
