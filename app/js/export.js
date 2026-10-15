@@ -1,6 +1,6 @@
 // Excel export for owners/admins. Works with or without QuickBooks: tickets (with rates and amounts),
 // a tab per truck like a ticketing sheet, totals by truck and by client, plus fuel and receipts.
-import { sb, S, esc, toast, svg, iso, today, nameOf, truckName, clientName, sheet, closeSheet, CONFIG } from "./core.js";
+import { sb, S, esc, toast, svg, iso, today, nameOf, truckName, clientName, sheet, closeSheet, CONFIG, periodOf } from "./core.js";
 import { Select, FormField, PrimaryButton, Setting, Toggle, setLoading } from "./ui.js";
 
 let xlsxLib = null;
@@ -16,11 +16,11 @@ const r2 = n => Math.round(n * 100) / 100;
 
 export function ranges() {
   const d = new Date(), y = d.getFullYear(), m = d.getMonth();
-  const per = (dt) => dt.getDate() <= 15 ? [iso(new Date(dt.getFullYear(), dt.getMonth(), 1)), iso(new Date(dt.getFullYear(), dt.getMonth(), 15))] : [iso(new Date(dt.getFullYear(), dt.getMonth(), 16)), iso(new Date(dt.getFullYear(), dt.getMonth() + 1, 0))];
-  const cur = per(d), prevEnd = new Date(cur[0] + "T00:00:00"); prevEnd.setDate(prevEnd.getDate() - 1);
+  const curP = periodOf(d), before = new Date(curP.s + "T00:00:00"); before.setDate(before.getDate() - 1);
+  const lastP = periodOf(before), cur = [curP.s, curP.e];
   return {
     period: { label: "This pay period", v: cur },
-    lastperiod: { label: "Last pay period", v: per(prevEnd) },
+    lastperiod: { label: "Last pay period", v: [lastP.s, lastP.e] },
     month: { label: "This month", v: [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))] },
     lastmonth: { label: "Last month", v: [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))] },
     year: { label: "This year", v: [iso(new Date(y, 0, 1)), today()] },

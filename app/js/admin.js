@@ -97,15 +97,20 @@ view("alltickets", { tab: "tickets", async render(main, p) {
   main.innerHTML = `${TopBar({ title: "Field Tickets", back: "tickets" })}
     <div style="margin:8px 0 14px">${SegmentedControl("atStatus", [{ value: "submitted", label: "To approve" }, { value: "approved", label: "Approved" }, { value: "invoiced", label: "Invoiced" }], status)}</div>
     <div id="atTop"></div><div id="atList">${Skeleton(4)}</div>`;
-  main.addEventListener("seg", e => go("alltickets", { status: e.detail }));
-  const { data } = await sb.from("tickets").select("*").eq("company_id", S.company.id).eq("status", status).order("work_date", { ascending: false }).limit(300);
-  const rows = data || [];
+  main.addEventListener("seg", e => ["lastperiod", "period", "all"].includes(e.detail) ? go("alltickets", { status, per: e.detail }) : go("alltickets", { status: e.detail }));
+  const { data } = await sb.from("tickets").select("*").eq("company_id", S.company.id).eq("status", status).order("work_date", { ascending: false }).limit(500);
+  // approved tickets get sent to the books one pay period at a time, so invoices and payroll line up
+  const R = ranges(), per = status === "approved" ? (p.per || "lastperiod") : "all";
+  const span = per === "all" ? null : R[per].v;
+  const rows = (data || []).filter(r => !span || (r.work_date >= span[0] && r.work_date <= span[1]));
+  const perLabel = span ? `${shortDate(span[0])} to ${shortDate(span[1])}` : "";
   if (status === "submitted" && rows.length) $("atTop").innerHTML = `<div style="margin-bottom:14px">${PrimaryButton(`Approve all ${rows.length}`, { id: "atAll", icon: "check" })}</div>`;
   const books = S.company.books || "quickbooks";
   if (status !== "submitted") $("atTop").innerHTML = `<div style="margin-bottom:14px">${
+    status === "approved" ? `<div style="margin-bottom:12px">${SegmentedControl("atPer", [{ value: "lastperiod", label: "Last pay period" }, { value: "period", label: "This pay period" }, { value: "all", label: "All" }], per)}</div>` : ""}${
     status === "approved" && rows.length && books === "quickbooks" ? (S.company.qbo_connected
-      ? `${Banner(`<b>${rows.length} approved ticket${rows.length > 1 ? "s" : ""}</b> ready to become invoice drafts in QuickBooks, one per client. Nothing gets sent to the client.`, { icon: "info" })}<div style="margin-top:12px">${PrimaryButton("Draft invoices in QuickBooks", { id: "atInv", icon: "file" })}</div>`
-      : Banner(`<b>Connect QuickBooks</b> in More › Books to turn these into invoice drafts automatically.`, { icon: "link" }))
+      ? `${Banner(`<b>${rows.length} approved ticket${rows.length > 1 ? "s" : ""}</b>${perLabel ? ` for ${perLabel}` : ""}, ${fmtH(rows.reduce((a, r) => a + Number(r.hours || 0) + Number(r.standby_hours || 0), 0))} hrs. Sending makes invoice drafts (one per client) and payroll timesheets (one per person per day) in QuickBooks. Nothing goes to a client and nobody gets paid until you do it in QuickBooks.`, { icon: "info" })}<div style="margin-top:12px">${PrimaryButton("Send to QuickBooks", { id: "atInv", icon: "file" })}</div>`
+      : Banner(`<b>Connect QuickBooks</b> in More › Books to turn these into invoice drafts and payroll timesheets automatically.`, { icon: "link" }))
     : books === "sheets" ? Banner(`Approved tickets show up in your <b>Google Sheet</b> on their own, about every hour.`, { icon: "info" }) : ""}
     <div style="margin-top:12px">${(books === "excel" ? PrimaryButton : SecondaryButton)("Download Excel", { id: "atXls", icon: "upload" })}</div></div>`;
   const byClient = {}; rows.forEach(r => (byClient[r.client_id || "none"] = byClient[r.client_id || "none"] || []).push(r));
@@ -124,10 +129,18 @@ view("alltickets", { tab: "tickets", async render(main, p) {
   const xl = $("atXls"); if (xl) xl.onclick = exportSheet;
   const inv = $("atInv"); if (inv) inv.onclick = async () => {
     setLoading(inv, true);
-    const { data: res, error } = await sb.functions.invoke("qbo", { body: { action: "draft_invoices", company_id: S.company.id, ticket_ids: rows.map(r => r.id) } });
+    const ids = rows.map(r => r.id), body = a => ({ body: { action: a, company_id: S.company.id, ticket_ids: ids } });
+    const { data: hrs } = await sb.functions.invoke("qbo", body("send_hours"));
+    const { data: res, error } = await sb.functions.invoke("qbo", body("draft_invoices"));
     setLoading(inv, false);
     if (error || !res || res.error) return toast((res && res.error) || "QuickBooks didn't take it. Try again.", "alert");
-    toast(`${res.created} draft invoice${res.created === 1 ? "" : "s"} in QuickBooks`); go("alltickets", { status: "invoiced" });
+    const h = hrs && !hrs.error ? hrs : null, miss = (h && h.missing) || [];
+    sheet(`<h3>Sent to QuickBooks</h3>${List([
+      ListRow({ icon: "file", iconTone: "ok", title: `${res.created} invoice draft${res.created === 1 ? "" : "s"}`, sub: (res.refs || []).join(", ") || "One per client. Check them, then send from QuickBooks." }),
+      ListRow({ icon: "clock", iconTone: h && h.sent ? "ok" : "warn", title: h ? `${h.sent} timesheet entr${h.sent === 1 ? "y" : "ies"}, ${fmtH(h.hours || 0)} hrs` : "Timesheets didn't go", sub: h ? "Ready for payroll. They show up when you run payroll in QuickBooks." : (hrs && hrs.error) || "Try again from More › Books." })])}
+      ${miss.length ? `<div style="margin-top:12px">${Banner(`<b>No QuickBooks employee for:</b> ${esc(miss.join(", "))}. Their hours weren't sent. Match them in More › Books, then send that pay period's hours from there.`, { tone: "warn", icon: "alert" })}</div>` : ""}
+      ${h && h.errors && h.errors.length ? `<p class="t-small" style="margin-top:10px">${esc(h.errors.join(" | "))}</p>` : ""}
+      <div style="margin-top:16px">${PrimaryButton(miss.length ? "Match crew in Books" : "Done", { id: "qbDone" })}</div>`, el => el.querySelector("#qbDone").onclick = () => { closeSheet(); go(miss.length ? "integrations" : "alltickets", miss.length ? {} : { status: "invoiced" }); });
   };
 } });
 
@@ -287,6 +300,10 @@ view("integrations", { tab: "more", async render(main, p) {
     panel.innerHTML = `${Card(`<div class="row between"><div><div class="t-label">QuickBooks Online</div><div class="t-title" style="margin-top:6px">${co.qbo_connected ? "Connected" : "Not connected"}</div>${co.qbo_company_name ? `<div class="t-small" style="margin-top:2px">${esc(co.qbo_company_name)}</div>` : ""}</div>${co.qbo_connected ? StatusBadge("Live", "ok", "check") : ""}</div>
       ${co.qbo_connected ? "" : `<p class="t-body" style="margin-top:12px">Connect once. Approved tickets become invoice drafts and receipts become expenses with the photo attached. Nothing is ever sent to a client without you.</p>`}`, { cls: co.qbo_connected ? "accent-card" : "" })}
       ${co.qbo_connected ? `${Section("Match your clients")}<p class="t-body" style="margin:-4px 0 12px">Pick the QuickBooks customer for each client so invoices land in the right place.</p><div id="qbMap">${Skeleton(3)}</div>
+        ${Section("Match your crew for payroll")}<p class="t-body" style="margin:-4px 0 12px">Pick each person's employee in QuickBooks so their hours land on the right timesheet. Names that match exactly are picked for you.</p><div id="qbEmp">${Skeleton(3)}</div>
+        ${Section("Payroll hours")}<p class="t-body" style="margin:-4px 0 12px">Hours go over on their own when you send approved tickets. Use this to send a pay period's hours by themselves, like after matching someone above. Hours already sent are skipped.</p>
+        <div style="margin-bottom:12px">${SegmentedControl("bkPer", [{ value: "lastperiod", label: "Last pay period" }, { value: "period", label: "This pay period" }], "lastperiod")}</div>
+        ${SecondaryButton("Send hours to QuickBooks", { id: "bkHrs", icon: "clock" })}<p class="form-msg" id="bkHrsMsg"></p>
         <div style="margin-top:20px">${Button("Disconnect", { variant: "danger", id: "qbOff" })}</div>` : `<div style="margin-top:16px">${PrimaryButton("Connect QuickBooks", { id: "qbOn", icon: "link" })}</div>`}
       <div style="margin-top:12px">${SecondaryButton("Download Excel too", { id: "bkXls", icon: "upload" })}</div>`;
     const on = $("qbOn"); if (on) on.onclick = async () => {
@@ -303,6 +320,21 @@ view("integrations", { tab: "more", async render(main, p) {
       $("qbMap").innerHTML = S.clients.length ? S.clients.map(c => Select({ id: "map-" + c.id, label: c.name, options: cust.map(q => ({ value: q.id, label: q.name })), value: c.qbo_customer_id || "", placeholder: "Create new in QuickBooks" })).join("")
         : EmptyState({ icon: "users", title: "No clients yet", text: "Add clients in Company settings first." });
       $("qbMap").onchange = async e => { const id = e.target.id.replace("map-", ""); await sb.from("clients").update({ qbo_customer_id: e.target.value || null }).eq("id", id); await loadCompany(co.id); toast("Saved"); };
+      const { data: ed } = await sb.functions.invoke("qbo", { body: { action: "employees", company_id: co.id } });
+      const emps = (ed && ed.employees) || [], norm = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
+      const crew = S.people.filter(m => m.active !== false);
+      $("qbEmp").innerHTML = !emps.length ? Banner("No employees in QuickBooks yet. Add your crew there under Payroll › Employees, then come back.", { icon: "info" })
+        : crew.map(m => Select({ id: "emp-" + m.user_id, label: m.full_name || "Crew member", options: emps.map(x => ({ value: x.id, label: x.name })),
+          value: m.qbo_employee_id || (emps.find(x => norm(x.name) === norm(m.full_name)) || {}).id || "", placeholder: "Not on payroll" })).join("");
+      $("qbEmp").onchange = async e => { await sb.functions.invoke("qbo", { body: { action: "map_employee", company_id: co.id, user_id: e.target.id.replace("emp-", ""), employee_id: e.target.value || null } }); await loadCompany(co.id); toast("Saved"); };
+      let hrPer = "lastperiod"; main.addEventListener("seg", e => { if (["lastperiod", "period"].includes(e.detail)) hrPer = e.detail; });
+      $("bkHrs").onclick = async () => {
+        const b = $("bkHrs"), [from, to] = ranges()[hrPer].v; setLoading(b, true);
+        const { data: r } = await sb.functions.invoke("qbo", { body: { action: "send_hours", company_id: co.id, from, to } });
+        setLoading(b, false);
+        if (!r || r.error) return msg("bkHrsMsg", (r && r.error) || "QuickBooks didn't take it. Try again.", "bad");
+        msg("bkHrsMsg", `${r.sent} timesheet entr${r.sent === 1 ? "y" : "ies"} sent, ${fmtH(r.hours || 0)} hrs.${r.missing && r.missing.length ? ` Not sent (no employee picked): ${r.missing.join(", ")}.` : ""}`, r.missing && r.missing.length ? "bad" : "ok");
+      };
     }
   } else {
     const sheets = books === "sheets";

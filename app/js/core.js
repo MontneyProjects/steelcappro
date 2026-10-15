@@ -238,6 +238,19 @@ export function payEvents(sched, from, to) {
   }
   return { paydays: pays, cutoffs: cuts };
 }
+// the pay period (start/end ISO dates) a day falls in, using the company's pay schedule
+export function periodOf(d = new Date()) {
+  const sched = S.company.pay_schedule || {};
+  if (sched.type === "biweekly" || sched.type === "weekly") {
+    const b = new Date(d); b.setDate(b.getDate() - 40); const f = new Date(d); f.setDate(f.getDate() + 40);
+    const cuts = [...payEvents(sched, b, f).cutoffs].sort(), k = iso(d);
+    const end = cuts.find(c => c >= k) || k, prev = cuts.filter(c => c < k).pop();
+    const s = prev ? new Date(prev + "T00:00:00") : new Date(d); s.setDate(s.getDate() + 1);
+    return { s: iso(s), e: end };
+  }
+  return d.getDate() <= 15 ? { s: iso(new Date(d.getFullYear(), d.getMonth(), 1)), e: iso(new Date(d.getFullYear(), d.getMonth(), 15)) }
+    : { s: iso(new Date(d.getFullYear(), d.getMonth(), 16)), e: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)) };
+}
 export function nextPay(sched) {
   const t = new Date(), end = new Date(t); end.setDate(end.getDate() + 45);
   const ev = payEvents(sched, t, end), k = iso(t);

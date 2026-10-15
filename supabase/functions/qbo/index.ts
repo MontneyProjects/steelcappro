@@ -1,4 +1,5 @@
 // Steelcap Pro <-> QuickBooks Online. Each company connects its own QuickBooks once (OAuth).
+// Approved tickets become invoice drafts (per client) and timesheets (per crew member) for QuickBooks Payroll.
 // Needs platform_secrets: qbo_client_id, qbo_client_secret, qbo_env ('sandbox' or 'production').
 // Redirect URI to register with Intuit: https://hsyscwheyixsxzqahvbr.supabase.co/functions/v1/qbo
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -143,6 +144,55 @@ Deno.serve(async (req) => {
         created++; refs.push(ref);
       }
       return json({ ok: true, created, refs });
+    }
+    if (body.action === "employees") {
+      const r = await query(c, "select Id, DisplayName, GivenName, FamilyName from Employee where Active = true maxresults 1000");
+      return json({ employees: (r.Employee || []).map((x: { Id: string; DisplayName?: string; GivenName?: string; FamilyName?: string }) => ({ id: x.Id, name: x.DisplayName || [x.GivenName, x.FamilyName].filter(Boolean).join(" ") })) });
+    }
+    if (body.action === "map_employee") {
+      await admin.from("members").update({ qbo_employee_id: body.employee_id || null }).eq("company_id", cid).eq("user_id", body.user_id);
+      return json({ ok: true });
+    }
+    if (body.action === "send_hours") {
+      // Approved hours -> QuickBooks timesheets (TimeActivity), one per ticket, under the crew member's employee record.
+      // QuickBooks Payroll picks these up when payroll is run for the period. Nothing is paid from here.
+      let q = admin.from("tickets").select("*").eq("company_id", cid).in("status", ["approved", "invoiced"]).is("qbo_time_id", null);
+      if (Array.isArray(body.ticket_ids)) q = q.in("id", body.ticket_ids);
+      else q = q.gte("work_date", body.from).lte("work_date", body.to);
+      const { data: tks } = await q;
+      if (!tks?.length) return json({ ok: true, sent: 0, hours: 0, missing: [] });
+      const [{ data: mem }, { data: trucks }, { data: clients }] = await Promise.all([
+        admin.from("members").select("user_id,full_name,qbo_employee_id").eq("company_id", cid),
+        admin.from("trucks").select("id,unit").eq("company_id", cid), admin.from("clients").select("id,name,qbo_customer_id").eq("company_id", cid)]);
+      const er = await query(c, "select Id, DisplayName, GivenName, FamilyName from Employee where Active = true maxresults 1000");
+      const norm = (v: string) => (v || "").toLowerCase().replace(/[^a-z]/g, "");
+      const byName = new Map<string, string>();
+      for (const e of (er.Employee || []) as { Id: string; DisplayName?: string; GivenName?: string; FamilyName?: string }[]) {
+        byName.set(norm(e.DisplayName || ""), e.Id); byName.set(norm(`${e.GivenName || ""}${e.FamilyName || ""}`), e.Id);
+      }
+      const empOf = new Map<string, string | null>();
+      for (const m of mem || []) {
+        let id = m.qbo_employee_id || byName.get(norm(m.full_name || "")) || null;
+        if (id && !m.qbo_employee_id) await admin.from("members").update({ qbo_employee_id: id }).eq("company_id", cid).eq("user_id", m.user_id);
+        empOf.set(m.user_id, id);
+      }
+      const P = new Map((mem || []).map((m) => [m.user_id, m.full_name || "Crew member"]));
+      const T = new Map((trucks || []).map((t) => [t.id, t.unit])), C = new Map((clients || []).map((x) => [x.id, x]));
+      let sent = 0, hours = 0; const missing = new Set<string>(), errors: string[] = [];
+      for (const t of tks.sort((a, b) => a.work_date.localeCompare(b.work_date))) {
+        const emp = empOf.get(t.user_id);
+        if (!emp) { missing.add(P.get(t.user_id) || "Crew member"); continue; }
+        const total = Number(t.hours || 0) + Number(t.standby_hours || 0); if (total <= 0) continue;
+        const mins = Math.round(total * 60), cl = t.client_id ? C.get(t.client_id) : null;
+        const desc = [t.truck_id ? "Truck " + T.get(t.truck_id) : "", cl?.name, t.site, Number(t.standby_hours) > 0 ? `${t.standby_hours} hrs standby` : "", "Steelcap Pro ticket"].filter(Boolean).join(" · ");
+        try {
+          const r = await qb(c, "POST", "timeactivity", { NameOf: "Employee", EmployeeRef: { value: emp }, TxnDate: t.work_date, Hours: Math.floor(mins / 60), Minutes: mins % 60,
+            BillableStatus: "NotBillable", Description: desc.slice(0, 4000), ...(cl?.qbo_customer_id ? { CustomerRef: { value: cl.qbo_customer_id } } : {}) });
+          await admin.from("tickets").update({ qbo_time_id: r.TimeActivity.Id, time_sent_at: new Date().toISOString() }).eq("id", t.id);
+          sent++; hours += total;
+        } catch (err) { errors.push(`${P.get(t.user_id)} ${t.work_date}: ${(err as Error).message}`); }
+      }
+      return json({ ok: true, sent, hours: Math.round(hours * 100) / 100, missing: [...missing], errors: errors.slice(0, 5) });
     }
     if (body.action === "post_expense") {
       const { data: e } = await admin.from("expenses").select("*").eq("company_id", cid).eq("id", body.expense_id).single();

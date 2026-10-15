@@ -1,4 +1,5 @@
 // Crew screens: home, safety + forms, tickets, hours & pay + certificates, fuel, More hub, account.
+import { periodOf } from "./core.js";
 import { sb, S, $, esc, store, toast, msg, svg, view, go, isAdmin, today, iso, dayLabel, money, num, fmtH, initials, first, nameOf,
   truckName, clientName, logoUrl, sheet, closeSheet, uploadFile, signUrls, fileUrl, viewImage, payEvents, nextPay, nice, CONFIG, shrinkImage } from "./core.js";
 import { TopBar, PageHead, Section, StickyBar, CompanyBrand, Card, MetricCard, Tile, ListRow, List, Avatar, StatusBadge, EmptyState, Skeleton, Banner, SuccessState,
@@ -14,18 +15,6 @@ const shortName = tp => tp.kind === "pretrip" ? "Pre-Trip" : tp.kind === "toolbo
 const truckLabel = t => t ? `${t.unit}${t.kind ? " · " + t.kind : ""}` : "";
 const truckOpts = () => S.trucks.filter(t => t.active !== false).map(t => ({ value: t.id, label: truckLabel(t) }));
 const activePeople = () => S.people.filter(p => p.active);
-export function periodOf(d = new Date()) {
-  const sched = S.company.pay_schedule || {};
-  if (sched.type === "biweekly" || sched.type === "weekly") {
-    const b = new Date(d); b.setDate(b.getDate() - 40); const f = new Date(d); f.setDate(f.getDate() + 40);
-    const cuts = [...payEvents(sched, b, f).cutoffs].sort(), k = iso(d);
-    const end = cuts.find(c => c >= k) || k, prev = cuts.filter(c => c < k).pop();
-    const s = prev ? new Date(prev + "T00:00:00") : new Date(d); s.setDate(s.getDate() + 1);
-    return { s: iso(s), e: end };
-  }
-  return d.getDate() <= 15 ? { s: iso(new Date(d.getFullYear(), d.getMonth(), 1)), e: iso(new Date(d.getFullYear(), d.getMonth(), 15)) }
-    : { s: iso(new Date(d.getFullYear(), d.getMonth(), 16)), e: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)) };
-}
 const shortDate = k => new Date(k + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 
 // ---------- account sheet ----------
