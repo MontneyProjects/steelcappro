@@ -2,8 +2,8 @@
 import { sb, S, $, esc, toast, svg, view, isAdmin, iso, shrinkImage, CONFIG } from "./core.js";
 import { TopBar, Chips } from "./ui.js";
 
-const SUGS_ADMIN = ["Who hasn't done their Pre-Trip today?", "Any open truck defects?", "Whose tickets expire in the next 30 days?", "How many hours did we bill each client this pay period?", "What did fuel cost per truck this month?", "Write a toolbox talk on working near overhead lines"];
-const SUGS_CREW = ["When's my next payday?", "How many hours do I have this pay period?", "When does my H2S expire?", "Write a toolbox talk on cold weather", "What hazards should go on an FLHA for a picker lift?"];
+const SUGS_ADMIN = ["Who hasn't done their Pre-Trip today?", "Any open truck defects?", "Whose tickets expire in the next 30 days?", "How many hours did we bill each client this pay period?", "What did fuel cost per truck this month?", "Write a toolbox meeting on working near overhead lines"];
+const SUGS_CREW = ["When's my next payday?", "How many hours do I have this pay period?", "When does my H2S expire?", "Write a toolbox meeting on cold weather", "What hazards should go on an FLHA for a picker lift?"];
 let history = [];
 
 view("ask", { tab: "more", async render(main) {
