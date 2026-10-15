@@ -41,7 +41,7 @@ function welcome() {
   applyTheme("steelcap");
   showGate(`<div class="hero" style="--hero-img:url(hero.jpg)">${BrandLockup({ mark: 58, size: 26 })}</div>
     <div class="gate-body">
-      <h1>Manage your operations<br><span class="accent">from your phone.</span></h1>
+      <h1>Your whole company.<br><span class="accent">One easy app.</span></h1>
       <p class="lead">Safety, dispatch, tickets, expenses and the books. One app. You run the work.</p>
       <div style="margin-top:auto">
         ${PrimaryButton("Start my company", { id: "wStart" })}
