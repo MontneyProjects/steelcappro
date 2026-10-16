@@ -227,7 +227,7 @@ function paywall() {
         <ul class="t-body" style="margin:10px 0 0; padding-left:20px; line-height:1.8"><li>Every feature, your whole crew</li><li>QuickBooks, Excel or Google Sheets</li><li>Cancel anytime from Settings</li></ul>
       </div>
       ${PrimaryButton(ended ? "Restart plan" : "Start free trial", { id: "pwGo" })}
-      <p class="t-small" style="text-align:center; margin-top:10px">Secure checkout by Stripe. Plus GST where it applies.</p>`
+      <p class="t-small" style="text-align:center; margin-top:10px">Secure checkout by Stripe. ${co.country === "US" ? "You'll see the price in US dollars at checkout. Plus sales tax where it applies." : "Plus GST where it applies."}</p>`
     : `<h1 style="margin:0 0 6px">${esc(co.name)} isn't active</h1><p class="lead">The company's Steelcap Pro plan isn't active right now. Ask your owner to start or restart it, then come back.</p>`}
     <p class="form-msg" id="pwMsg"></p>
     <div style="margin-top:auto; padding-top:24px">${S.companies.length > 1 ? `<button class="btn ghost full" type="button" id="pwSwitch">Switch company</button>` : ""}<button class="btn ghost full" type="button" id="pwOut">Sign out</button></div>`);
@@ -255,6 +255,14 @@ const wizHead = (n, title, lead, single) => `<div class="wiz-top">${n > 1 || sin
 const wizFoot = (label = "Next", skip) => `<div style="margin-top:auto; padding-top:24px">${PrimaryButton(label, { id: "wzNext" })}${skip ? `<button class="btn ghost full" type="button" id="wzSkip" style="margin-top:6px">Skip for now</button>` : ""}<p class="form-msg" id="wzMsg"></p></div>`;
 export const TRUCK_KINDS = ["Picker", "Pickup", "Flatbed", "Skid steer", "Hydrovac", "Vac truck", "Water truck", "Welding rig", "Other"];
 
+// [code, name, timezone]
+const REGIONS = {
+  CA: [["AB","Alberta","America/Edmonton"],["BC","British Columbia","America/Vancouver"],["SK","Saskatchewan","America/Regina"],["MB","Manitoba","America/Winnipeg"],["ON","Ontario","America/Toronto"],["QC","Quebec","America/Toronto"],["NB","New Brunswick","America/Halifax"],["NS","Nova Scotia","America/Halifax"],["PE","Prince Edward Island","America/Halifax"],["NL","Newfoundland and Labrador","America/St_Johns"],["YT","Yukon","America/Whitehorse"],["NT","Northwest Territories","America/Yellowknife"],["NU","Nunavut","America/Iqaluit"]],
+  US: [["AL","Alabama","America/Chicago"],["AK","Alaska","America/Anchorage"],["AZ","Arizona","America/Phoenix"],["AR","Arkansas","America/Chicago"],["CA","California","America/Los_Angeles"],["CO","Colorado","America/Denver"],["CT","Connecticut","America/New_York"],["DE","Delaware","America/New_York"],["FL","Florida","America/New_York"],["GA","Georgia","America/New_York"],["HI","Hawaii","Pacific/Honolulu"],["ID","Idaho","America/Boise"],["IL","Illinois","America/Chicago"],["IN","Indiana","America/Indiana/Indianapolis"],["IA","Iowa","America/Chicago"],["KS","Kansas","America/Chicago"],["KY","Kentucky","America/New_York"],["LA","Louisiana","America/Chicago"],["ME","Maine","America/New_York"],["MD","Maryland","America/New_York"],["MA","Massachusetts","America/New_York"],["MI","Michigan","America/Detroit"],["MN","Minnesota","America/Chicago"],["MS","Mississippi","America/Chicago"],["MO","Missouri","America/Chicago"],["MT","Montana","America/Denver"],["NE","Nebraska","America/Chicago"],["NV","Nevada","America/Los_Angeles"],["NH","New Hampshire","America/New_York"],["NJ","New Jersey","America/New_York"],["NM","New Mexico","America/Denver"],["NY","New York","America/New_York"],["NC","North Carolina","America/New_York"],["ND","North Dakota","America/Chicago"],["OH","Ohio","America/New_York"],["OK","Oklahoma","America/Chicago"],["OR","Oregon","America/Los_Angeles"],["PA","Pennsylvania","America/New_York"],["RI","Rhode Island","America/New_York"],["SC","South Carolina","America/New_York"],["SD","South Dakota","America/Chicago"],["TN","Tennessee","America/Chicago"],["TX","Texas","America/Chicago"],["UT","Utah","America/Denver"],["VT","Vermont","America/New_York"],["VA","Virginia","America/New_York"],["WA","Washington","America/Los_Angeles"],["WV","West Virginia","America/New_York"],["WI","Wisconsin","America/Chicago"],["WY","Wyoming","America/Denver"]],
+};
+const guessCountry = () => { try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; return /Edmonton|Vancouver|Regina|Winnipeg|Toronto|Halifax|St_Johns|Whitehorse|Yellowknife|Iqaluit|Moncton|Montreal/.test(tz) ? "CA" : /^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Boise|Detroit|Indiana)/.test(tz) || tz === "Pacific/Honolulu" ? "US" : "CA"; } catch (e) { return "CA"; } };
+const regionSelect = c => Select({ id: "wzProv", label: c === "US" ? "State" : "Province or territory", options: REGIONS[c].map(([v, l]) => ({ value: v, label: l })), value: c === "US" ? "TX" : "AB" });
+
 export async function wizard(n, opts = {}) {
   const single = !!opts.single;
   const next = k => single ? (store("fp_setup_done_" + S.company.id, 1), enter(S.company.id).then(() => go("settings"))) : wizard(k);
@@ -267,19 +275,22 @@ export async function wizard(n, opts = {}) {
       <form id="wz" novalidate style="display:flex; flex-direction:column; flex:1">
       ${FormField({ id: "wzName", label: "Company name", autocomplete: "organization", required: true })}
       ${FormField({ id: "wzMe", label: "Your full name", value: intent.full_name || meta.full_name || "", required: true })}
-      ${Select({ id: "wzProv", label: "Province", options: [{ value: "AB", label: "Alberta" }, { value: "BC", label: "British Columbia" }, { value: "SK", label: "Saskatchewan" }, { value: "MB", label: "Manitoba" }, { value: "ON", label: "Ontario" }, { value: "Other", label: "Other" }], value: "AB" })}
+      ${Select({ id: "wzCountry", label: "Country", options: [{ value: "CA", label: "Canada" }, { value: "US", label: "United States" }], value: guessCountry() })}
+      <div id="wzProvWrap">${regionSelect(guessCountry())}</div>
       ${wizFoot()}</form>`);
     $("wzNext").type = "submit";
+    $("wzCountry").onchange = () => { $("wzProvWrap").innerHTML = regionSelect($("wzCountry").value); };
     $("wz").onsubmit = async e => {
       e.preventDefault(); clearErrors(gate);
       if (!$("wzName").value.trim()) return fieldError(gate, "wzName", "Enter your company name");
       if (!$("wzMe").value.trim()) return fieldError(gate, "wzMe", "Enter your name");
       setLoading($("wzNext"), true);
-      const prov = $("wzProv").value, tz = { BC: "America/Vancouver", SK: "America/Regina", MB: "America/Winnipeg", ON: "America/Toronto" }[prov] || "America/Edmonton";
+      const country = $("wzCountry").value, prov = $("wzProv").value, tz = REGIONS[country].find(r => r[0] === prov)?.[2] || "America/Edmonton";
       const { data, error } = await sb.rpc("create_company", { p_name: $("wzName").value, p_full_name: $("wzMe").value, p_phone: intent.phone || meta.phone || null, p_province: prov, p_timezone: tz });
       if (error) { setLoading($("wzNext"), false); return msg("wzMsg", error.message, "bad"); }
       store("fp_intent", null);
       const ref = store("sc_ref"); if (ref) await sb.rpc("set_company_ref", { cid: data, p_ref: ref });
+      if (country !== "CA") await sb.from("companies").update({ country }).eq("id", data);
       await loadCompany(data); wizard(2);
     };
     return;

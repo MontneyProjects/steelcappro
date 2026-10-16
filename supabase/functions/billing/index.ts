@@ -109,7 +109,7 @@ async function checkout(req: Request, b: Record<string, any>) {
     subscription_data: { ...(firstTime ? { trial_period_days: 7 } : {}), metadata: { company_id: cid, ref: co.ref || "" } },
     metadata: { company_id: cid, ref: co.ref || "" },
     ...(s.stripe_auto_tax === "true" ? { automatic_tax: { enabled: true }, customer_update: { address: "auto", name: "auto" } } : {}),
-    tax_id_collection: { enabled: true },
+    tax_id_collection: { enabled: true }, ...(s.stripe_adaptive === "false" ? {} : { adaptive_pricing: { enabled: true } }),
     allow_promotion_codes: true, billing_address_collection: "required",
     success_url: ret + (ret.includes("?") ? "&" : "?") + "billing=ok", cancel_url: ret + (ret.includes("?") ? "&" : "?") + "billing=cancel",
   });
@@ -207,7 +207,7 @@ async function selftest(req: Request) {
     mode: "subscription", line_items: [{ price: s.stripe_price_199, quantity: 1 }],
     subscription_data: { trial_period_days: 7, metadata: { company_id: "selftest" } }, metadata: { company_id: "selftest" },
     ...(s.stripe_auto_tax === "true" ? { automatic_tax: { enabled: true } } : {}),
-    tax_id_collection: { enabled: true }, allow_promotion_codes: true, billing_address_collection: "required",
+    tax_id_collection: { enabled: true }, adaptive_pricing: { enabled: true }, allow_promotion_codes: true, billing_address_collection: "required",
     success_url: "https://steelcappro.com/app/?billing=ok", cancel_url: "https://steelcappro.com/app/?billing=cancel",
   });
   await stripe("POST", `checkout/sessions/${session.id}/expire`);

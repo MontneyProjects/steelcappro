@@ -16,6 +16,11 @@ const truckLabel = t => t ? `${t.unit}${t.kind ? " · " + t.kind : ""}` : "";
 const truckOpts = () => S.trucks.filter(t => t.active !== false).map(t => ({ value: t.id, label: truckLabel(t) }));
 const activePeople = () => S.people.filter(p => p.active);
 const shortDate = k => new Date(k + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+// ---------- morning check-in: entered once, fills the day's forms and ticket ----------
+const ciKey = () => `ci_${S.company.id}_${S.user.id}_${today()}`;
+export const checkin = () => store(ciKey());
+const flhaTpl = () => S.templates.find(t => t.kind === "flha");
+const optsOf = (id, fallback) => (((flhaTpl() || {}).schema || {}).fields || []).find(f => f.id === id)?.options || fallback;
 
 // ---------- delete my account ----------
 function deleteAccountSheet() {
@@ -67,6 +72,7 @@ view("home", { async render(main) {
     </div>
     ${S.company.billing_status === "past_due" && S.me?.role === "owner" ? `<div style="margin-bottom:12px">${Banner(`<b>Your last payment didn't go through.</b> Update your card to keep your crew on Steelcap Pro. <button class="link" type="button" id="hPastDue">Update card</button>`, { tone: "warn" })}</div>` : ""}
     ${S.company.plan === "demo" ? `<div style="margin-bottom:12px">${Banner(`<b>This is a demo company.</b> Tap around and try anything: approve tickets, send a dispatch, run the billing. Nothing here is real. <button class="link" type="button" id="hDemoStart">Start my real company</button>`, { icon: "info" })}</div>` : ""}
+    <div id="hCheckin"></div>
     <div class="grid-2" id="hTiles">${Skeleton(1, 92)}${Skeleton(1, 92)}</div>
     <div style="margin-top:12px">${PrimaryButton("New field ticket", { icon: "plus", go: "ticket" })}${SecondaryButton("Log fuel", { icon: "fuel", go: "fuel" })}</div>
     <div id="hOrders"></div>
@@ -85,6 +91,9 @@ view("home", { async render(main) {
   tiles.push({ label: "Ticket", done: (tks.data || []).some(r => r.work_date === t), go: "ticket", p: {}, icon: "ticket" });
   $("hTiles").className = tiles.length % 2 === 1 && tiles.length > 2 ? "grid-3" : "grid-2";
   $("hTiles").innerHTML = tiles.map(Tile).join("");
+  const ci = checkin(), anyLeft = tiles.some(x => !x.done && x.label !== "Ticket");
+  if (ci) $("hCheckin").innerHTML = `<div style="margin-bottom:12px">${List([ListRow({ icon: "check", iconTone: "ok", title: "Checked in for today", sub: [ci.truck && "Truck " + truckName(ci.truck), ci.site, clientName(ci.client)].filter(Boolean).join(" · ") || "Your forms are filled in", go: "checkin", chev: true })])}</div>`;
+  else if (anyLeft && dailyTemplates().length) $("hCheckin").innerHTML = `<div style="margin-bottom:12px">${Card(`<div class="t-eyebrow">Start your day</div><div class="t-h3" style="margin:4px 0 4px">One check-in fills your ${dailyTemplates().map(shortName).join(", ")}</div><p class="t-small" style="margin:0 0 12px">Truck, site, crew and hazards once. Then just check each form and send.</p>${PrimaryButton("Start my day", { icon: "shield", go: "checkin" })}`, { cls: "accent-card" })}</div>`;
   const left = tiles.filter(x => !x.done).length;
   $("hSub").textContent = left ? `${left} thing${left > 1 ? "s" : ""} left for today.` : "All caught up today. Nice work.";
   $("hHours").innerHTML = `${fmtH((tks.data || []).reduce((a, r) => a + Number(r.hours || 0), 0))}<small> hrs</small>`;
@@ -137,18 +146,57 @@ view("safety", { async render(main) {
     : EmptyState({ icon: "shield", title: "Nothing yet", text: "Forms you send show up here." });
 } });
 
+// ---------- START MY DAY (check-in) ----------
+view("checkin", { tab: "safety", noTabs: true, sticky: true, async render(main) {
+  const prev = checkin() || {}, t = today();
+  const { data: ords } = await sb.from("dispatch_recipients").select("dispatches(*)").eq("user_id", S.user.id);
+  const d = ((ords || []).map(o => o.dispatches).filter(x => x && x.company_id === S.company.id && x.work_date === t)[0]) || {};
+  const lastTk = store("fp_tk_last") || {};
+  const v = {
+    truck: prev.truck || d.truck_id || (S.trucks.find(x => x.id === store("fp_last_truck")) ? store("fp_last_truck") : "") || lastTk.truck || "",
+    client: prev.client || d.client_id || lastTk.client || "", site: prev.site || d.site || lastTk.site || "",
+    task: prev.task || d.notes?.split("\n")[0]?.slice(0, 80) || "", crew: prev.crew || [S.user.id], hazards: prev.hazards || [], ppe: prev.ppe || [],
+  };
+  const HAZ = optsOf("hazards", ["Overhead lines", "H2S / sour gas", "Suspended loads", "Pinch points", "Slips and trips", "Weather"]);
+  const PPE = optsOf("ppe", ["Hard hat", "Safety glasses", "FR coveralls", "Gloves", "H2S monitor"]);
+  main.innerHTML = `${TopBar({ title: "Start my day", back: "home" })}
+    <p class="t-body" style="margin:4px 0 12px">Fill this once. Your ${dailyTemplates().map(shortName).join(", ") || "forms"} and today's ticket come out already filled in.${d.id ? " Pulled from today's dispatch." : ""}</p>
+    <form id="ci" novalidate>
+    ${S.trucks.length ? Select({ id: "ciTruck", label: "Truck", options: truckOpts(), value: v.truck, placeholder: "Pick your truck" }) : ""}
+    ${S.clients.length ? Select({ id: "ciClient", label: "Client", options: S.clients.filter(c => c.active !== false).map(c => ({ value: c.id, label: c.name })), value: v.client, placeholder: "Pick the client" }) : ""}
+    ${FormField({ id: "ciSite", label: "Site / LSD", value: v.site, placeholder: "e.g. 102/13-22-078-06W6" })}
+    ${FormField({ id: "ciTask", label: "Job / task today", value: v.task, placeholder: "e.g. Set anchors, tie in piping" })}
+    <div class="form-field" style="margin-top:20px"><span class="ff-label">Crew on site</span>${PeoplePicker("ciCrew", activePeople(), v.crew)}</div>
+    <div class="form-field" style="margin-top:20px"><span class="ff-label">Hazards on site <span class="t-small">(select all that apply)</span></span>${Chips("ciHaz", HAZ, v.hazards)}</div>
+    <div class="form-field" style="margin-top:20px"><span class="ff-label">PPE</span>${Chips("ciPpe", PPE, v.ppe)}</div>
+    </form>${StickyBar(PrimaryButton(prev.at ? "Update check-in" : "Fill my forms", { id: "ciGo" }))}`;
+  $("ciGo").onclick = () => {
+    clearErrors(main);
+    if ($("ciTruck") && !$("ciTruck").value) return fieldError(main, "ciTruck", "Pick your truck");
+    if (!$("ciSite").value.trim()) return fieldError(main, "ciSite", "Where are you working today?");
+    const ci = { truck: $("ciTruck")?.value || "", client: $("ciClient")?.value || "", site: $("ciSite").value.trim(), task: $("ciTask").value.trim(),
+      crew: peopleValues(main, "ciCrew"), hazards: chipValues(main, "ciHaz"), ppe: chipValues(main, "ciPpe"), at: new Date().toISOString() };
+    store(ciKey(), ci); if (ci.truck) store("fp_last_truck", ci.truck);
+    toast("Your forms are filled in. Check each one and send.");
+    const next = dailyTemplates()[0]; next ? go("form", { id: next.id }) : go("home");
+  };
+} });
+
 // ---------- FILL A FORM ----------
 const PEOPLE_FIELDS = ["crew", "attendees"];
 view("form", { tab: "safety", noTabs: true, sticky: true, async render(main, p) {
   const tp = S.templates.find(x => x.id === p.id); if (!tp) return go("safety");
   const sc = tp.schema || { fields: [] }, F = { checks: {}, photos: {} };
-  const lastTruck = S.trucks.find(x => x.id === store("fp_last_truck")) ? store("fp_last_truck") : "";
+  const ci = checkin() || {};
+  const lastTruck = S.trucks.find(x => x.id === (ci.truck || store("fp_last_truck"))) ? (ci.truck || store("fp_last_truck")) : "";
+  const pre = { site: ci.site, task: ci.task, topic: ci.task ? "Today's job: " + ci.task : "", location: ci.site, job: ci.task };
+  const preMulti = { hazards: ci.hazards, ppe: ci.ppe };
   const field = f => {
     if (f.type === "checklist") return `${Section(f.label || "Checklist", `<button class="link" type="button" id="allOk">Mark all OK</button>`)}<div class="checklist">${(f.items || []).map((it, i) => ChecklistRow(i, it)).join("")}</div>`;
-    if (f.type === "multi") return `<div class="form-field" style="margin-top:20px"><span class="ff-label">${esc(f.label)} <span class="t-small">(select all that apply)</span></span>${Chips(f.id, f.options || [])}</div>`;
-    if (f.type === "people" || PEOPLE_FIELDS.includes(f.id)) return `<div class="form-field" data-field="${esc(f.id)}" style="margin-top:20px"><span class="ff-label">${esc(f.label)}</span>${PeoplePicker(f.id, activePeople(), [S.user.id])}<input class="input" data-f-extra="${esc(f.id)}" placeholder="Others not on the app (optional)" style="margin-top:8px"></div>`;
-    if (f.type === "textarea") return TextArea({ id: "f_" + f.id, label: f.label, required: f.required });
-    return FormField({ id: "f_" + f.id, label: f.label, required: f.required, inputmode: f.type === "number" ? "decimal" : undefined });
+    if (f.type === "multi") return `<div class="form-field" style="margin-top:20px"><span class="ff-label">${esc(f.label)} <span class="t-small">(select all that apply)</span></span>${Chips(f.id, f.options || [], preMulti[f.id] || [])}</div>`;
+    if (f.type === "people" || PEOPLE_FIELDS.includes(f.id)) return `<div class="form-field" data-field="${esc(f.id)}" style="margin-top:20px"><span class="ff-label">${esc(f.label)}</span>${PeoplePicker(f.id, activePeople(), ci.crew && ci.crew.length ? ci.crew : [S.user.id])}<input class="input" data-f-extra="${esc(f.id)}" placeholder="Others not on the app (optional)" style="margin-top:8px"></div>`;
+    if (f.type === "textarea") return TextArea({ id: "f_" + f.id, label: f.label, required: f.required, value: pre[f.id] || "" });
+    return FormField({ id: "f_" + f.id, label: f.label, required: f.required, value: pre[f.id] || "", inputmode: f.type === "number" ? "decimal" : undefined });
   };
   main.innerHTML = `${TopBar({ title: tp.name, back: "safety" })}<form id="ff" novalidate style="margin-top:8px">
     ${sc.truck ? (S.trucks.length ? Select({ id: "fTruck", label: "Truck", options: truckOpts(), value: lastTruck, placeholder: "Pick your truck", required: true }) : Banner("No trucks set up yet. Your admin can add them in Company settings.", { tone: "warn" })) : ""}
@@ -195,7 +243,8 @@ view("form", { tab: "safety", noTabs: true, sticky: true, async render(main, p) 
       if (truck) store("fp_last_truck", truck);
       main.className = "view no-nav";
       main.innerHTML = SuccessState({ title: r.queued ? "Saved on your phone" : `${shortName(tp)} sent`, text: r.queued ? "No signal right now. It sends itself as soon as you're back in range." : defects.length ? `Your boss got the defect alert for ${defects.length} item${defects.length > 1 ? "s" : ""}.` : "You're good to go. Stay safe out there.",
-        actions: PrimaryButton("Back to Safety", { go: "safety" }) + SecondaryButton("Home", { go: "home" }) });
+        actions: (() => { const nx = ci.at ? dailyTemplates().find(x => x.id !== tp.id && dailyTemplates().indexOf(x) > dailyTemplates().indexOf(tp)) : null;
+          return nx ? PrimaryButton(`Next: ${shortName(nx)}`, { go: "form", p: { id: nx.id } }) + SecondaryButton("Home", { go: "home" }) : PrimaryButton("Back to Safety", { go: "safety" }) + SecondaryButton("Home", { go: "home" }); })() });
     } catch (er) { setLoading($("ffSend"), false); toast("Didn't send. Try again.", "alert"); }
   };
 } });
@@ -214,7 +263,7 @@ view("tickets", { async render(main, p) {
 } });
 
 view("ticket", { tab: "tickets", noTabs: true, sticky: true, async render(main) {
-  const last = store("fp_tk_last") || {};
+  const ci = checkin() || {}, last = { ...(store("fp_tk_last") || {}), ...(ci.truck ? { truck: ci.truck } : {}), ...(ci.client ? { client: ci.client } : {}), ...(ci.site ? { site: ci.site } : {}) };
   const lastTruck = S.trucks.find(x => x.id === last.truck) ? last.truck : "";
   main.innerHTML = `${TopBar({ title: "New Field Ticket", back: "tickets" })}<form id="tk" novalidate style="margin-top:8px">
     ${FormField({ id: "tkDate", label: "Date", type: "date", value: today(), required: true })}
@@ -225,7 +274,7 @@ view("ticket", { tab: "tickets", noTabs: true, sticky: true, async render(main) 
     ${FormField({ id: "tkSup", label: "Site supervisor", value: last.sup || "", placeholder: "Optional" })}
     <div class="grid-2" style="margin-bottom:16px">${Stepper({ id: "tkHours", label: "Hours", value: last.hours || 10 })}${Stepper({ id: "tkHelper", label: "Helper hours", value: 0 })}</div>
     ${FormField({ id: "tkStandby", label: "Standby hours", inputmode: "decimal", placeholder: "0" })}
-    ${TextArea({ id: "tkDesc", label: "What you did", placeholder: "Lifts, moves, materials, anything the client needs to see" })}
+    ${TextArea({ id: "tkDesc", label: "What you did", placeholder: "Lifts, moves, materials, anything the client needs to see", value: ci.task || "" })}
     </form>${StickyBar(PrimaryButton("Submit ticket", { id: "tkSend" }))}`;
   $("tkSend").onclick = async () => {
     clearErrors(main);
