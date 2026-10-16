@@ -1,6 +1,6 @@
 // Crew screens: home, safety + forms, tickets, hours & pay + certificates, fuel, More hub, account.
 import { periodOf } from "./core.js";
-import { sb, S, $, esc, store, toast, msg, svg, view, go, isAdmin, today, iso, dayLabel, money, num, fmtH, initials, first, nameOf,
+import { sb, S, $, esc, store, toast, msg, svg, view, go, isAdmin, isIOSApp, today, iso, dayLabel, money, num, fmtH, initials, first, nameOf,
   truckName, clientName, logoUrl, sheet, closeSheet, uploadFile, signUrls, fileUrl, viewImage, payEvents, nextPay, nice, CONFIG, shrinkImage } from "./core.js";
 import { TopBar, PageHead, Section, StickyBar, CompanyBrand, Card, MetricCard, Tile, ListRow, List, Avatar, StatusBadge, EmptyState, Skeleton, Banner, SuccessState,
   PrimaryButton, SecondaryButton, Button, IconButton, FormField, TextArea, Select, SegmentedControl, LineTabs, Stepper, Chips, PeoplePicker, ChecklistRow, Capture, Setting, Toggle,
@@ -70,7 +70,7 @@ view("home", { async render(main) {
       <div class="hh-top">${CompanyBrand()}${meBtn()}</div>
       <div class="hh-greet"><h1>Good ${hr < 12 ? "morning" : hr < 17 ? "afternoon" : "evening"},<br>${esc(first(S.me?.full_name) || "there")}</h1><p class="t-body" id="hSub">&nbsp;</p></div>
     </div>
-    ${S.company.billing_status === "past_due" && S.me?.role === "owner" ? `<div style="margin-bottom:12px">${Banner(`<b>Your last payment didn't go through.</b> Update your card to keep your crew on Steelcap Pro. <button class="link" type="button" id="hPastDue">Update card</button>`, { tone: "warn" })}</div>` : ""}
+    ${S.company.billing_status === "past_due" && S.me?.role === "owner" && !isIOSApp() ? `<div style="margin-bottom:12px">${Banner(`<b>Your last payment didn't go through.</b> Update your card to keep your crew on Steelcap Pro. <button class="link" type="button" id="hPastDue">Update card</button>`, { tone: "warn" })}</div>` : ""}
     ${S.company.plan === "demo" ? `<div style="margin-bottom:12px">${Banner(`<b>This is a demo company.</b> Tap around and try anything: approve tickets, send a dispatch, run the billing. Nothing here is real. <button class="link" type="button" id="hDemoStart">Start my real company</button>`, { icon: "info" })}</div>` : ""}
     <div id="hCheckin"></div>
     <div class="grid-2" id="hTiles">${Skeleton(1, 92)}${Skeleton(1, 92)}</div>

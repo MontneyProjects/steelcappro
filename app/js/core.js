@@ -16,6 +16,8 @@ export const sb = createClient(CONFIG.url, CONFIG.key, { auth: { persistSession:
 export const S = { user: null, companies: [], company: null, me: null, people: [], byId: {}, trucks: [], clients: [], templates: [], view: "home", params: {} };
 export const isAdmin = () => !!S.me && (S.me.role === "owner" || S.me.role === "admin");
 export const isOwner = () => !!S.me && S.me.role === "owner";
+// Inside the iPhone App Store build, no prices or purchase buttons (Apple 3.1.3): owners manage plans on the website.
+export const isIOSApp = () => { try { return window.Capacitor?.getPlatform?.() === "ios"; } catch (e) { return false; } };
 export const billingOk = () => !S.billingLive || !S.company || S.company.plan === "demo" || S.company.comped || ["trialing", "active", "past_due"].includes(S.company.billing_status);
 
 // ---------- small helpers ----------

@@ -1,0 +1,18 @@
+{
+  "name": "steelcap-pro-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "sync": "rm -rf www && cp -r ../app www && npx cap sync",
+    "assets": "npx @capacitor/assets generate --iconBackgroundColor '#0E1316' --splashBackgroundColor '#0E1316'"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/core": "6.1.2",
+    "@capacitor/ios": "6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "6.1.2"
+  }
+}

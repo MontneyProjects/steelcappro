@@ -1,5 +1,5 @@
 // Boot, sign-in / create account, join with an invite code, and the 6-step company setup.
-import { sb, S, CONFIG, $, esc, store, toast, msg, svg, go, loadCompany, billingOk, isOwner, applyTheme, logoUrl, closeSheet, sheet, uploadFile, signUrls, fileUrl } from "./core.js";
+import { sb, S, CONFIG, $, esc, store, toast, msg, svg, go, loadCompany, billingOk, isOwner, isIOSApp, applyTheme, logoUrl, closeSheet, sheet, uploadFile, signUrls, fileUrl } from "./core.js";
 import { BrandLockup, PrimaryButton, SecondaryButton, Button, FormField, Select, SegmentedControl, RadioList, StickyBar, IconButton, EmptyState,
   setLoading, fieldError, clearErrors, segValue, radioValue, Avatar } from "./ui.js";
 import "./views.js";
@@ -220,7 +220,8 @@ function paywall() {
   const co = S.company, owner = isOwner(), ended = ["canceled", "inactive"].includes(co.billing_status) || !!co.stripe_subscription_id;
   const big = S.people.filter(p => p.active).length > 20;
   showGate(`<div style="margin:24px 0 18px">${BrandLockup({ mark: 46, size: 22 })}</div>
-    ${owner ? `<h1 style="margin:0 0 6px">${ended ? "Restart your plan" : "Start your 7-day free trial"}</h1>
+    ${owner && isIOSApp() ? `<h1 style="margin:0 0 6px">${esc(co.name)} needs an active plan</h1><p class="lead">Plans are set up by the company owner outside this app. Once the plan is active, sign in again here.</p>`
+    : owner ? `<h1 style="margin:0 0 6px">${ended ? "Restart your plan" : "Start your 7-day free trial"}</h1>
       <p class="lead">${esc(co.name)} is set up. ${ended ? "Pick up where you left off." : "Try everything free for 7 days. Cancel anytime before it ends and you won't be charged."}</p>
       <div class="card" style="margin:18px 0">
         <div style="display:flex; align-items:baseline; gap:8px"><span style="font-size:40px; font-weight:900; letter-spacing:-.02em">$${big ? 249 : 199}</span><span class="t-small">CAD / month${big ? ", more than 20 users" : ", up to 20 users"}</span></div>

@@ -1,5 +1,5 @@
 // Owner/admin screens: crew today, defects, dispatch, ticket approval + invoice drafts, receipts, team, settings, safety forms, QuickBooks.
-import { sb, S, $, esc, toast, msg, svg, view, go, isAdmin, isOwner, today, iso, dayLabel, money, num, fmtH, initials, first, nameOf,
+import { sb, S, $, esc, toast, msg, svg, view, go, isAdmin, isOwner, isIOSApp, today, iso, dayLabel, money, num, fmtH, initials, first, nameOf,
   truckName, clientName, sheet, closeSheet, uploadFile, signUrls, fileUrl, viewImage, loadCompany, CONFIG } from "./core.js";
 import { TopBar, Section, StickyBar, Card, MetricCard, ListRow, List, Avatar, StatusBadge, EmptyState, Skeleton, Banner,
   PrimaryButton, SecondaryButton, Button, IconButton, FormField, TextArea, Select, SegmentedControl, Chips, PeoplePicker, Capture, Setting, Toggle,
@@ -265,7 +265,7 @@ view("settings", { tab: "more", async render(main) {
     ListRow({ icon: "users", title: "Clients", sub: `${S.clients.length} client${S.clients.length === 1 ? "" : "s"}`, data: { "data-set": "clients" }, chev: true }),
     ListRow({ icon: "shield", title: "Safety forms", sub: `${S.templates.filter(t => t.active).length} active`, go: "formsettings" }),
     ListRow({ icon: "gear", title: "Company details", sub: co.name, data: { "data-set": "details" }, chev: true }),
-    ...(isOwner() && co.plan !== "demo" ? [ListRow({ icon: "dollar", title: "Plan and billing", sub: billingLabel(co), go: "plan" })] : [])])}</div>`;
+    ...(isOwner() && co.plan !== "demo" && !isIOSApp() ? [ListRow({ icon: "dollar", title: "Plan and billing", sub: billingLabel(co), go: "plan" })] : [])])}</div>`;
   main.addEventListener("click", e => {
     const b = e.target.closest("[data-set]"); if (!b) return;
     const a = b.dataset.set, w = n => window.__fp.wizard(n, { single: true });

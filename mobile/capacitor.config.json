@@ -1,0 +1,8 @@
+{
+  "appId": "com.steelcappro.app",
+  "appName": "Steelcap Pro",
+  "webDir": "www",
+  "backgroundColor": "#0E1316",
+  "server": { "androidScheme": "https", "hostname": "steelcappro.com" },
+  "ios": { "contentInset": "always" }
+}
